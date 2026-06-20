@@ -6,13 +6,15 @@ import { parseExcelFile } from './excelParser';
 
 const API_BASE = '/api';
 const ADMIN_CODE = 'MTS-ADMIN-2026';
+const DEFAULT_AVATAR =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="24" fill="%2310202e"/><circle cx="60" cy="40" r="24" fill="%2394a3b8"/><path d="M30 100c0-18 14-32 30-32s30 14 30 32" fill="%2394a3b8"/></svg>';
 
 const isAdminRoute = typeof window !== 'undefined' && window.location.pathname === '/admin';
 
 function App() {
   const [employees, setEmployees] = useState<Employee[]>(defaultEmployees);
   const [query, setQuery] = useState('');
-  const [active, setActive] = useState<Employee | null>(defaultEmployees[0] || null);
+  const [active, setActive] = useState<Employee | null>(null);
   const [uploadMessage, setUploadMessage] = useState('');
   const [adminPin, setAdminPin] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
@@ -35,7 +37,7 @@ function App() {
     }
   }, [filtered, active]);
 
-  const activeData = active || filtered[0] || null;
+  const activeData = active || (query.trim() ? filtered[0] : null) || null;
 
   const reportsToManager = useMemo(() => {
     if (!activeData?.reportsTo) return null;
@@ -47,6 +49,7 @@ function App() {
   }, [employees, activeData]);
 
   const reportsToEmail = reportsToManager?.emailAddress || '';
+  const heroPhotoUrl = activeData?.photoUrl?.trim() ? activeData.photoUrl : DEFAULT_AVATAR;
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -302,9 +305,7 @@ function App() {
           >
             <div className="hero-card">
               <div className="photo-frame">
-                <div className="photo-ring">
-                  <span>{activeData?.fullName?.slice(0, 2)}</span>
-                </div>
+                <img className="hero-photo" src={heroPhotoUrl} alt="Employee photo" />
               </div>
               <div className="hero-copy">
                 <p className="detail-label">Current selection</p>

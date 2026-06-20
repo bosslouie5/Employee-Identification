@@ -200,8 +200,8 @@ app.delete('/api/source', (req, res) => {
   }
 });
 
-// Serve SPA catch-all route - must be last
-app.get('*', (req, res) => {
+// Serve SPA catch-all route for client-side routing
+app.use((req, res) => {
   res.sendFile(path.join(DIST_DIR, 'index.html'));
 });
 

@@ -21,23 +21,34 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
   const pageSubTitle = isAdminRoute
     ? 'Upload source files and manage employee data. This area is restricted to admins only.'
     : 'Search employee records and view information. No upload or edit access is available here.';
 
-  const filtered = useMemo(() => searchEmployees(employees, query), [employees, query]);
-  
+  const filtered = useMemo(
+    () => (hasSearched ? searchEmployees(employees, query) : []),
+    [employees, query, hasSearched]
+  );
+
   useEffect(() => {
+    if (!hasSearched) {
+      setActive(null);
+      return;
+    }
+
     if (filtered.length > 0 && !active) {
       setActive(filtered[0]);
     } else if (filtered.length > 0 && active && !filtered.find(e => e.id === active.id)) {
       setActive(filtered[0]);
+    } else if (filtered.length === 0) {
+      setActive(null);
     }
-  }, [filtered, active]);
+  }, [filtered, active, hasSearched]);
 
-  const activeData = active || (query.trim() ? filtered[0] : null) || null;
+  const activeData = active || null;
 
   const reportsToManager = useMemo(() => {
     if (!activeData?.reportsTo) return null;
@@ -63,7 +74,6 @@ function App() {
       const result = await response.json();
       if (Array.isArray(result.employees)) {
         setEmployees(result.employees);
-        setActive(result.employees[0] || null);
         setUploadMessage('');
       }
     } catch (error) {
@@ -104,7 +114,9 @@ function App() {
       }
 
       setEmployees(parsedEmployees);
-      setActive(parsedEmployees[0] || null);
+      if (hasSearched) {
+        setActive(parsedEmployees[0] || null);
+      }
       setQuery('');
 
       const formData = new FormData();
@@ -269,12 +281,20 @@ function App() {
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setQuery(value);
+                if (value.trim()) {
+                  setHasSearched(true);
+                }
+              }}
               placeholder="Search by status, name, ID, department, company or code"
             />
 
             <div className="search-results">
-              {filtered.length ? (
+              {!hasSearched ? (
+                <p className="empty-state">Start typing to search the employee directory.</p>
+              ) : filtered.length ? (
                 filtered.map((item) => (
                   <button
                     key={item.id}
@@ -298,113 +318,127 @@ function App() {
             <span className="tag">Profile</span>
             <h2>Employee information</h2>
           </div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="details-card"
-          >
-            <div className="hero-card">
-              <div className="photo-frame">
-                <img className="hero-photo" src={heroPhotoUrl} alt="Employee photo" />
-              </div>
-              <div className="hero-copy">
-                <p className="detail-label">Current selection</p>
-                <h3>{activeData?.fullName}</h3>
-
-                <div className="selection-meta">
-                  <span className="selection-role">{activeData?.positionTitle} · {activeData?.department}</span>
+          {activeData ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="details-card"
+            >
+              <div className="hero-card">
+                <div className="photo-frame">
+                  <img className="hero-photo" src={heroPhotoUrl} alt="Employee photo" />
                 </div>
-                <p className="selection-status">{activeData?.status}</p>
-              </div>
-            </div>
+                <div className="hero-copy">
+                  <p className="detail-label">Current selection</p>
+                  <h3>{activeData.fullName}</h3>
 
-            <div className="field-grid">
-              <div className="field-block">
-                <label>ID Number</label>
-                <p>{activeData?.id}</p>
-              </div>
-              <div className="field-block">
-                <label>Company</label>
-                <p>{activeData?.companyDisplay}</p>
-              </div>
-            </div>
-
-            <div className="field-grid">
-              <div className="field-block">
-                <label>Position Title</label>
-                <p>{activeData?.positionTitle}</p>
-              </div>
-              <div className="field-block">
-                <label>Department</label>
-                <p>{activeData?.department}</p>
-              </div>
-            </div>
-
-            <div className="field-grid">
-              <div className="field-block">
-                <label>Gender</label>
-                <p>{activeData?.gender}</p>
-              </div>
-              <div className="field-block">
-                <label>Sub Department</label>
-                <p>{activeData?.subDepartment}</p>
-              </div>
-            </div>
-
-            <div className="field-grid">
-              <div className="field-block">
-                <label>Phone</label>
-                <p>{activeData?.phoneNumber}</p>
-              </div>
-              <div className="field-block">
-                <label>Cost Centre Code</label>
-                <p>{activeData?.costCentreCode}</p>
-              </div>
-            </div>
-
-            <div className="field-grid">
-              <div className="field-block">
-                <label>Email</label>
-                <p>{activeData?.emailAddress}</p>
-              </div>
-              <div className="field-block">
-                <label>Location Group</label>
-                <p>{activeData?.location}</p>
-              </div>
-            </div>
-
-            <div className="field-grid">
-              <div className="field-block">
-                <label>Reports to</label>
-                <div className="reports-to-display">
-                  <p className="reports-to-name">{activeData?.reportsTo || '—'}</p>
-                  {reportsToEmail ? (
-                    <p className="reports-to-detail">{reportsToEmail}</p>
-                  ) : null}
+                  <div className="selection-meta">
+                    <span className="selection-role">{activeData.positionTitle} · {activeData.department}</span>
+                  </div>
+                  <p className="selection-status">{activeData.status}</p>
                 </div>
               </div>
-              <div className="field-block blank-field">&nbsp;</div>
-            </div>
 
-            <div className="upload-grid">
-              <div className="upload-card">
-                <label>Photo field</label>
-                <div className="upload-placeholder">Drag or select file</div>
+              <div className="field-grid">
+                <div className="field-block">
+                  <label>ID Number</label>
+                  <p>{activeData.id}</p>
+                </div>
+                <div className="field-block">
+                  <label>Company</label>
+                  <p>{activeData.companyDisplay}</p>
+                </div>
               </div>
-              <div className="upload-card">
-                <label>ID photo field 1</label>
-                <div className="upload-placeholder">Upload front of ID</div>
+
+              <div className="field-grid">
+                <div className="field-block">
+                  <label>Position Title</label>
+                  <p>{activeData.positionTitle}</p>
+                </div>
+                <div className="field-block">
+                  <label>Department</label>
+                  <p>{activeData.department}</p>
+                </div>
               </div>
-              <div className="upload-card">
-                <label>ID photo field 2</label>
-                <div className="upload-placeholder">Upload back of ID</div>
+
+              <div className="field-grid">
+                <div className="field-block">
+                  <label>Gender</label>
+                  <p>{activeData.gender}</p>
+                </div>
+                <div className="field-block">
+                  <label>Sub Department</label>
+                  <p>{activeData.subDepartment}</p>
+                </div>
               </div>
-              <div className="upload-card">
-                <label>PDF field</label>
-                <div className="upload-placeholder">Attach document</div>
+
+              <div className="field-grid">
+                <div className="field-block">
+                  <label>Phone</label>
+                  <p>{activeData.phoneNumber}</p>
+                </div>
+                <div className="field-block">
+                  <label>Cost Centre Code</label>
+                  <p>{activeData.costCentreCode}</p>
+                </div>
               </div>
-            </div>
-          </motion.div>
+
+              <div className="field-grid">
+                <div className="field-block">
+                  <label>Email</label>
+                  <p>{activeData.emailAddress}</p>
+                </div>
+                <div className="field-block">
+                  <label>Location Group</label>
+                  <p>{activeData.location}</p>
+                </div>
+              </div>
+
+              <div className="field-grid">
+                <div className="field-block">
+                  <label>Reports to</label>
+                  <div className="reports-to-display">
+                    <p className="reports-to-name">{activeData.reportsTo || '—'}</p>
+                    {reportsToEmail ? (
+                      <p className="reports-to-detail">{reportsToEmail}</p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="field-block blank-field">&nbsp;</div>
+              </div>
+
+              <div className="upload-grid">
+                <div className="upload-card">
+                  <label>Photo field</label>
+                  <div className="upload-placeholder">Drag or select file</div>
+                </div>
+                <div className="upload-card">
+                  <label>ID photo field 1</label>
+                  <div className="upload-placeholder">Upload front of ID</div>
+                </div>
+                <div className="upload-card">
+                  <label>ID photo field 2</label>
+                  <div className="upload-placeholder">Upload back of ID</div>
+                </div>
+                <div className="upload-card">
+                  <label>PDF field</label>
+                  <div className="upload-placeholder">Attach document</div>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="details-card details-placeholder"
+            >
+              <div className="placeholder-copy">
+                <p className="detail-label">Employee profile is empty</p>
+                <h3>Search to populate employee information.</h3>
+                <p className="placeholder-note">The fields will remain blank until a valid search result is selected.</p>
+              </div>
+            </motion.div>
+          )}
         </section>
 
         <section className="panel panel-qr">
@@ -415,16 +449,25 @@ function App() {
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="qr-card"
+            className={activeData ? 'qr-card' : 'qr-card qr-placeholder'}
           >
-            <div className="qr-box">
-              <QRCode value={activeData?.qrCodeData || 'N/A'} size={168} bgColor="#f8fafc" fgColor="#0f172a" />
-            </div>
-            <p className="qr-detail">Scan to preview the employee ID or synchronize the record instantly.</p>
-            <div className="qr-meta">
-              <span>{activeData?.id}</span>
-              <span>{activeData?.location}</span>
-            </div>
+            {activeData ? (
+              <>
+                <div className="qr-box">
+                  <QRCode value={activeData.qrCodeData || 'N/A'} size={168} bgColor="#f8fafc" fgColor="#0f172a" />
+                </div>
+                <p className="qr-detail">Scan to preview the employee ID or synchronize the record instantly.</p>
+                <div className="qr-meta">
+                  <span>{activeData.id}</span>
+                  <span>{activeData.location}</span>
+                </div>
+              </>
+            ) : (
+              <div className="qr-placeholder-card">
+                <div className="qr-empty-graphic" />
+                <p className="qr-detail">No QR token shown until a search result is selected.</p>
+              </div>
+            )}
           </motion.div>
         </section>
       </main>

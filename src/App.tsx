@@ -53,7 +53,7 @@ function App() {
     setFetchError('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/employees`);
+      const response = await fetch(`${API_BASE}/employees`);
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}`);
       }
@@ -107,7 +107,7 @@ function App() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${API_BASE}/api/upload`, {
+      const response = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         headers: {
           'x-admin-token': ADMIN_CODE,

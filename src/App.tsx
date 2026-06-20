@@ -5,7 +5,7 @@ import { Employee, employees as defaultEmployees, searchEmployees } from './empl
 import { parseExcelFile } from './excelParser';
 
 const API_BASE = '/api';
-const ADMIN_CODE = 'MTS-ADMIN-2026';
+const ADMIN_CODE = 'Admin12345';
 const DEFAULT_AVATAR =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="24" fill="%2310202e"/><circle cx="60" cy="40" r="24" fill="%2394a3b8"/><path d="M30 100c0-18 14-32 30-32s30 14 30 32" fill="%2394a3b8"/></svg>';
 
@@ -61,6 +61,8 @@ function App() {
 
   const reportsToEmail = reportsToManager?.emailAddress || '';
   const heroPhotoUrl = activeData?.photoUrl?.trim() ? activeData.photoUrl : DEFAULT_AVATAR;
+  const employeeCount = employees.length;
+  const resultsCount = filtered.length;
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -203,13 +205,26 @@ function App() {
           <p className="eyebrow">Employee Sync Hub</p>
           <h1>{pageHeader}</h1>
           <p className="subtitle">{pageSubTitle}</p>
-          <p className={`status-banner ${fetchError ? 'warning' : loading ? 'loading' : 'success'}`}>
-            {loading
-              ? 'Synchronizing employee directory…'
-              : fetchError
-              ? fetchError
-              : 'Live employee lookup is ready for any browser and device.'}
-          </p>
+          <div className="status-strip">
+            <span className="status-pill">{loading ? 'Syncing...' : fetchError ? 'Warning' : 'Live'}</span>
+            <p className={`status-banner ${fetchError ? 'warning' : loading ? 'loading' : 'success'}`}>
+              {loading
+                ? 'Synchronizing employee directory…'
+                : fetchError
+                ? fetchError
+                : 'Live employee lookup is ready for any browser and device.'}
+            </p>
+          </div>
+          <div className="metrics-row">
+            <div className="metric-card">
+              <p>Total employees</p>
+              <strong>{employeeCount}</strong>
+            </div>
+            <div className="metric-card">
+              <p>Search results</p>
+              <strong>{hasSearched ? resultsCount : '-'}</strong>
+            </div>
+          </div>
         </div>
       </motion.header>
 
@@ -229,8 +244,14 @@ function App() {
                 </p>
               </div>
 
-              {!isAdmin ? (
-                <form className="admin-panel" onSubmit={handleAdminSubmit}>
+                  {!isAdmin ? (
+                <motion.form
+                  className="admin-panel"
+                  onSubmit={handleAdminSubmit}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
                   <input
                     className="admin-input"
                     type="password"
@@ -242,12 +263,12 @@ function App() {
                     Unlock upload
                   </button>
                   {adminMessage && <p className="admin-message">{adminMessage}</p>}
-                </form>
+                </motion.form>
               ) : (
                 <>
                   <div className="upload-cta">
                     <label className="file-input-label" htmlFor="excel-upload">
-                      Choose Excel file
+                      <span>Choose Excel file</span>
                       <input
                         id="excel-upload"
                         className="file-input"

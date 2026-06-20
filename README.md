@@ -1,46 +1,52 @@
 # Employees Identification
 
-A modern employee lookup dashboard built with React, Vite, and a Node.js backend for Excel upload and employee data sync.
+A premium employee lookup dashboard with fast search, admin Excel sync, QR access tokens, and a polished modern interface.
 
-## Recommended deployment
-For the best full deployment experience, use Render. It supports Node.js apps and can serve your frontend and backend together.
+## Publish-ready setup
+This repository is now configured for easy local setup and GitHub Pages deployment.
 
-### Best host: Render
-1. Create a GitHub repository and push the current project.
-2. Sign in to Render at https://render.com.
-3. Click **New** → **Web Service**.
-4. Connect your GitHub account and select the repository.
-5. Configure the service:
-   - **Name**: `employees-identification`
-   - **Branch**: `main` or your branch
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm start`
-6. Deploy the service.
-
-In Render, set the site name to `Employees Identification` for a clean public display.
-
-## Local setup and testing
+### Local install
 ```bash
-npm install
-npm run build
-npm run start
+npm run setup
+npm run dev
 ```
-Open `http://localhost:4000` and verify the app works.
+Open the URL shown by Vite to preview the app locally.
 
-## Alternative hosts
-- **Railway**: fast deployment for Node.js apps, good if you already have an account.
-- **Fly.io**: great for low-latency hosting.
-- **Vercel / Netlify**: use only if you want static hosting and do not need the backend upload/API.
+### Build for production
+```bash
+npm run build
+```
 
-## Notes
-- This project includes a backend server in `server/server.js`.
-- `npm start` runs the production server after building the app.
-- If you only deploy the static `dist/` folder, the upload API and live `/api/employees` endpoint will not work.
+### Publish to GitHub Pages
+This project can publish the frontend automatically to GitHub Pages using the workflow in `.github/workflows/gh-pages.yml`.
+
+To publish manually from your machine:
+```bash
+npm run deploy
+```
+
+> Note: GitHub Pages hosts the frontend only. The `/api` endpoints require a separate backend host for full upload and sync functionality.
+
+## Full backend deployment
+For a complete deployment with the Node.js backend, use Render, Railway, or any service that supports Node.
+
+Recommended Render setup:
+1. Push the repository to GitHub.
+2. Create a new Web Service in Render.
+3. Set the branch to `main`.
+4. Set the build command to `npm install && npm run build`.
+5. Set the start command to `npm start`.
+
+## Production preview
+After deployment, the app should render the static dashboard and fallback to sample employee data if the backend is not available.
 
 ## Project structure
 - `src/` — React frontend source
 - `server/` — Node.js API server
 - `dist/` — production build output
+- `.github/workflows/gh-pages.yml` — automatic frontend deployment
 
-## Naming
-The app name should be set as **Employees Identification** in your chosen hosting platform.
+## Notes
+- `npm start` builds the app and starts the backend server locally.
+- `npm run deploy` publishes the built `dist` folder to GitHub Pages.
+- The app now uses `base: './'` in Vite so static deployment works correctly from GitHub Pages.

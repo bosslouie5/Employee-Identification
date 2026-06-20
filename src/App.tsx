@@ -21,8 +21,8 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
   const [defaultPhotoUrl, setDefaultPhotoUrl] = useState<string | null>(null);
+  const [defaultPhotoPreview, setDefaultPhotoPreview] = useState<string | null>(null);
   const [defaultPhotoExists, setDefaultPhotoExists] = useState(false);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
@@ -31,24 +31,24 @@ function App() {
     : 'Search employee records and view information. No upload or edit access is available here.';
 
   const filtered = useMemo(
-    () => (hasSearched ? searchEmployees(employees, query) : []),
-    [employees, query, hasSearched]
+    () => (query.trim() ? searchEmployees(employees, query) : []),
+    [employees, query]
   );
 
   useEffect(() => {
-    if (!hasSearched) {
+    if (!query.trim()) {
       setActive(null);
       return;
     }
 
     if (filtered.length > 0 && !active) {
       setActive(filtered[0]);
-    } else if (filtered.length > 0 && active && !filtered.find(e => e.id === active.id)) {
+    } else if (filtered.length > 0 && active && !filtered.find((e) => e.id === active.id)) {
       setActive(filtered[0]);
     } else if (filtered.length === 0) {
       setActive(null);
     }
-  }, [filtered, active, hasSearched]);
+  }, [filtered, active, query]);
 
   const activeData = active || null;
 
@@ -139,9 +139,7 @@ function App() {
       }
 
       setEmployees(parsedEmployees);
-      if (hasSearched) {
-        setActive(parsedEmployees[0] || null);
-      }
+      setActive(parsedEmployees[0] || null);
       setQuery('');
 
       const formData = new FormData();
@@ -176,6 +174,12 @@ function App() {
   const handleUploadDefaultPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setDefaultPhotoPreview(previewUrl);
+    setDefaultPhotoUrl(previewUrl);
+    setDefaultPhotoExists(true);
+
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -187,7 +191,8 @@ function App() {
       const j = await res.json();
       if (res.ok) {
         setDefaultPhotoExists(true);
-        setDefaultPhotoUrl(j.url || '/data/default.png');
+        setDefaultPhotoUrl(j.url || previewUrl);
+        setDefaultPhotoPreview(null);
       } else {
         setUploadMessage(j.error || 'Failed to upload default photo');
       }
@@ -226,7 +231,6 @@ function App() {
       });
       const j = await res.json();
       if (res.ok) {
-        const j = await res.json();
         const newList = await fetchEmployees();
         if (newList && activeData) {
           const updated = newList.find((e: Employee) => e.id === activeData.id);
@@ -346,7 +350,7 @@ function App() {
             </div>
             <div className="metric-card">
               <p>Search results</p>
-              <strong>{hasSearched ? resultsCount : '-'}</strong>
+              <strong>{query.trim() ? resultsCount : '-'}</strong>
             </div>
           </div>
         </div>
@@ -406,7 +410,7 @@ function App() {
                   <div className="default-photo-panel">
                     <p className="upload-title">Default profile photo</p>
                     <div className="default-photo-row">
-                      <img src={defaultPhotoUrl || DEFAULT_AVATAR} alt="Default" className="default-photo-preview" />
+                      <img src={defaultPhotoPreview || defaultPhotoUrl || DEFAULT_AVATAR} alt="Default" className="default-photo-preview" />
                       <div className="default-photo-actions">
                         <label className="file-input-label">
                           <span>Set default photo</span>
@@ -442,17 +446,13 @@ function App() {
               type="text"
               value={query}
               onChange={(e) => {
-                const value = e.target.value;
-                setQuery(value);
-                if (value.trim()) {
-                  setHasSearched(true);
-                }
+                setQuery(e.target.value);
               }}
               placeholder="Search by status, name, ID, department, company or code"
             />
 
             <div className="search-results">
-              {!hasSearched ? (
+              {!query.trim() ? (
                 <p className="empty-state">Start typing to search the employee directory.</p>
               ) : filtered.length ? (
                 filtered.map((item) => (

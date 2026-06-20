@@ -22,6 +22,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
+  const [defaultPhotoUrl, setDefaultPhotoUrl] = useState<string | null>(null);
+  const [defaultPhotoExists, setDefaultPhotoExists] = useState(false);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
   const pageSubTitle = isAdminRoute
@@ -60,7 +62,9 @@ function App() {
   }, [employees, activeData]);
 
   const reportsToEmail = reportsToManager?.emailAddress || '';
-  const heroPhotoUrl = activeData?.photoUrl?.trim() ? activeData.photoUrl : DEFAULT_AVATAR;
+  const heroPhotoUrl = activeData?.photoUrl?.trim()
+    ? activeData.photoUrl
+    : defaultPhotoUrl || DEFAULT_AVATAR;
   const employeeCount = employees.length;
   const resultsCount = filtered.length;
 
@@ -77,10 +81,13 @@ function App() {
       if (Array.isArray(result.employees)) {
         setEmployees(result.employees);
         setUploadMessage('');
+        return result.employees;
       }
+      return null;
     } catch (error) {
       console.error('Failed to fetch employees:', error);
       setFetchError('Unable to synchronize with the server. Using local sample data.');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -89,6 +96,22 @@ function App() {
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  useEffect(() => {
+    async function fetchDefault() {
+      try {
+        const res = await fetch(`${API_BASE}/admin/default-photo`, { headers: { 'x-admin-token': ADMIN_CODE } });
+        if (!res.ok) return;
+        const j = await res.json();
+        setDefaultPhotoExists(!!j.exists);
+        setDefaultPhotoUrl(j.url || null);
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    fetchDefault();
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -147,6 +170,107 @@ function App() {
     } catch (error) {
       console.error('Upload failed:', error);
       setUploadMessage('Upload failed. The file data is previewed locally, but server sync is unavailable.');
+    }
+  };
+
+  const handleUploadDefaultPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API_BASE}/admin/default-photo`, {
+        method: 'POST',
+        headers: { 'x-admin-token': ADMIN_CODE },
+        body: fd,
+      });
+      const j = await res.json();
+      if (res.ok) {
+        setDefaultPhotoExists(true);
+        setDefaultPhotoUrl(j.url || '/data/default.png');
+      } else {
+        setUploadMessage(j.error || 'Failed to upload default photo');
+      }
+    } catch (err) {
+      setUploadMessage('Failed to upload default photo');
+    }
+  };
+
+  const handleDeleteDefaultPhoto = async () => {
+    if (!confirm('Delete the default photo?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/default-photo`, { method: 'DELETE', headers: { 'x-admin-token': ADMIN_CODE } });
+      if (res.ok) {
+        setDefaultPhotoExists(false);
+        setDefaultPhotoUrl(null);
+      } else {
+        const j = await res.json();
+        setUploadMessage(j.error || 'Failed to delete default photo');
+      }
+    } catch (err) {
+      setUploadMessage('Failed to delete default photo');
+    }
+  };
+
+  const handleUploadEmployeePhoto = async (field: string, file?: File) => {
+    if (!activeData) return;
+    const f = file;
+    if (!f) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await fetch(`${API_BASE}/admin/photo/${activeData.id}?field=${field}`, {
+        method: 'POST',
+        headers: { 'x-admin-token': ADMIN_CODE },
+        body: fd,
+      });
+      const j = await res.json();
+      if (res.ok) {
+        const j = await res.json();
+        const newList = await fetchEmployees();
+        if (newList && activeData) {
+          const updated = newList.find((e: Employee) => e.id === activeData.id);
+          if (updated) setActive(updated);
+        }
+        if (j.updated === false) {
+          setUploadMessage('Photo uploaded but employee record not found on server. Upload the Excel source via Admin first.');
+        } else {
+          setUploadMessage('Photo uploaded');
+        }
+      } else {
+        setUploadMessage(j.error || 'Failed to upload photo');
+      }
+    } catch (err) {
+      setUploadMessage('Failed to upload photo');
+    }
+  };
+
+  const handleDeleteEmployeePhoto = async (field: string) => {
+    if (!activeData) return;
+    if (!confirm('Delete this photo?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/photo/${activeData.id}?field=${field}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': ADMIN_CODE },
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const newList = await fetchEmployees();
+        if (newList && activeData) {
+          const updated = newList.find((e: Employee) => e.id === activeData.id);
+          if (updated) setActive(updated);
+        }
+        if (j.updated === false) {
+          setUploadMessage('Photo removed from disk but employee record not found on server. Upload the Excel source via Admin first.');
+        } else {
+          setUploadMessage('Photo deleted');
+        }
+      } else {
+        const j = await res.json();
+        setUploadMessage(j.error || 'Failed to delete photo');
+      }
+    } catch (err) {
+      setUploadMessage('Failed to delete photo');
     }
   };
 
@@ -279,6 +403,21 @@ function App() {
                     </label>
                     <p className="upload-note">Upload will update the employee list for all users in the current app session.</p>
                   </div>
+                  <div className="default-photo-panel">
+                    <p className="upload-title">Default profile photo</p>
+                    <div className="default-photo-row">
+                      <img src={defaultPhotoUrl || DEFAULT_AVATAR} alt="Default" className="default-photo-preview" />
+                      <div className="default-photo-actions">
+                        <label className="file-input-label">
+                          <span>Set default photo</span>
+                          <input type="file" accept="image/*" className="file-input" onChange={handleUploadDefaultPhoto} />
+                        </label>
+                        <button className="delete-button" type="button" onClick={handleDeleteDefaultPhoto} disabled={!defaultPhotoExists}>
+                          Delete default photo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   <div className="admin-actions">
                     <button className="delete-button" type="button" onClick={handleDeleteSource}>
                       Delete uploaded source file
@@ -323,8 +462,11 @@ function App() {
                     className={item.id === activeData?.id ? 'search-item active' : 'search-item'}
                     onClick={() => setActive(item)}
                   >
-                    <strong>{item.fullName}</strong>
-                    <span>{item.id}</span>
+                    <img src={item.photoUrl?.trim() ? item.photoUrl : (defaultPhotoUrl || DEFAULT_AVATAR)} alt="avatar" className="search-avatar" />
+                    <div className="search-item-content">
+                      <strong>{item.fullName}</strong>
+                      <span>{item.id}</span>
+                    </div>
                   </button>
                 ))
               ) : (
@@ -431,16 +573,60 @@ function App() {
               <div className="upload-grid">
                 <div className="upload-card">
                   <label>Photo field</label>
-                  <div className="upload-placeholder">Drag or select file</div>
+                  {isAdmin ? (
+                    <div className="upload-actions">
+                      <label className="file-input-label">
+                        <span>Upload photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="file-input"
+                          onChange={(e) => handleUploadEmployeePhoto('photo', e.target.files?.[0])}
+                        />
+                      </label>
+                      <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('photo')}>
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="upload-placeholder">Drag or select file</div>
+                  )}
                 </div>
+
                 <div className="upload-card">
                   <label>ID photo field 1</label>
-                  <div className="upload-placeholder">Upload front of ID</div>
+                  {isAdmin ? (
+                    <div className="upload-actions">
+                      <label className="file-input-label">
+                        <span>Upload ID front</span>
+                        <input type="file" accept="image/*" className="file-input" onChange={(e) => handleUploadEmployeePhoto('id1', e.target.files?.[0])} />
+                      </label>
+                      <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('id1')}>
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="upload-placeholder">Upload front of ID</div>
+                  )}
                 </div>
+
                 <div className="upload-card">
                   <label>ID photo field 2</label>
-                  <div className="upload-placeholder">Upload back of ID</div>
+                  {isAdmin ? (
+                    <div className="upload-actions">
+                      <label className="file-input-label">
+                        <span>Upload ID back</span>
+                        <input type="file" accept="image/*" className="file-input" onChange={(e) => handleUploadEmployeePhoto('id2', e.target.files?.[0])} />
+                      </label>
+                      <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('id2')}>
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="upload-placeholder">Upload back of ID</div>
+                  )}
                 </div>
+
                 <div className="upload-card">
                   <label>PDF field</label>
                   <div className="upload-placeholder">Attach document</div>

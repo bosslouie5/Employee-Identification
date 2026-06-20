@@ -47,6 +47,8 @@ app.use(express.json());
 
 // Serve static frontend files from dist folder
 app.use(express.static(DIST_DIR));
+// Expose uploaded data (employees.json, photos, default.png) to be served
+app.use('/data', express.static(DATA_DIR));
 
 function normalizeHeader(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -178,6 +180,122 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to parse Excel file' });
+  }
+});
+
+// Admin: get default photo info
+app.get('/api/admin/default-photo', (req, res) => {
+  const token = req.header('x-admin-token');
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+
+  const defaultPath = path.join(DATA_DIR, 'default.png');
+  const exists = fs.existsSync(defaultPath);
+  return res.json({ exists, url: exists ? '/data/default.png' : null });
+});
+
+// Admin: upload default photo
+app.post('/api/admin/default-photo', upload.single('file'), (req, res) => {
+  const token = req.header('x-admin-token');
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const dest = path.join(DATA_DIR, 'default.png');
+    fs.writeFileSync(dest, req.file.buffer);
+    return res.json({ success: true, url: '/data/default.png' });
+  } catch (err) {
+    console.error('Failed to save default photo:', err);
+    return res.status(500).json({ error: 'Failed to save default photo' });
+  }
+});
+
+// Admin: delete default photo
+app.delete('/api/admin/default-photo', (req, res) => {
+  const token = req.header('x-admin-token');
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const dest = path.join(DATA_DIR, 'default.png');
+    if (fs.existsSync(dest)) fs.unlinkSync(dest);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete default photo:', err);
+    return res.status(500).json({ error: 'Failed to delete default photo' });
+  }
+});
+
+// Admin: upload per-employee photo (field: photo, id1, id2)
+app.post('/api/admin/photo/:id', upload.single('file'), (req, res) => {
+  const token = req.header('x-admin-token');
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+
+  const empId = req.params.id;
+  const field = req.query.field || 'photo';
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  try {
+    const photosDir = path.join(DATA_DIR, 'photos');
+    if (!fs.existsSync(photosDir)) fs.mkdirSync(photosDir, { recursive: true });
+    const ext = path.extname(req.file.originalname) || '.png';
+    const nameMap = { photo: `${empId}-photo${ext}`, id1: `${empId}-id1${ext}`, id2: `${empId}-id2${ext}` };
+    const fileName = nameMap[field] || `${empId}-photo${ext}`;
+    const dest = path.join(photosDir, fileName);
+    fs.writeFileSync(dest, req.file.buffer);
+
+    // update employee record
+    let updated = false;
+    const emp = employees.find((e) => e.id === empId);
+    if (emp) {
+      const urlPath = `/data/photos/${fileName}`;
+      if (field === 'id1') emp.idPhoto1 = urlPath;
+      else if (field === 'id2') emp.idPhoto2 = urlPath;
+      else emp.photoUrl = urlPath;
+      saveEmployeesToDisk(employees);
+      updated = true;
+    } else {
+      console.warn(`Uploaded photo for ${empId} but no matching employee record found.`);
+    }
+
+    return res.json({ success: true, url: `/data/photos/${fileName}`, updated });
+  } catch (err) {
+    console.error('Failed to upload employee photo:', err);
+    return res.status(500).json({ error: 'Failed to upload photo' });
+  }
+});
+
+// Admin: delete per-employee photo
+app.delete('/api/admin/photo/:id', (req, res) => {
+  const token = req.header('x-admin-token');
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+
+  const empId = req.params.id;
+  const field = req.query.field || 'photo';
+  try {
+    const photosDir = path.join(DATA_DIR, 'photos');
+    const possible = fs.existsSync(photosDir) ? fs.readdirSync(photosDir) : [];
+    const match = possible.find((n) => n.startsWith(`${empId}-${field === 'id1' ? 'id1' : field === 'id2' ? 'id2' : 'photo'}`));
+    if (match) {
+      const dest = path.join(photosDir, match);
+      if (fs.existsSync(dest)) fs.unlinkSync(dest);
+    }
+
+    // update employee record
+    let updated = false;
+    const emp = employees.find((e) => e.id === empId);
+    if (emp) {
+      if (field === 'id1') emp.idPhoto1 = '';
+      else if (field === 'id2') emp.idPhoto2 = '';
+      else emp.photoUrl = '';
+      saveEmployeesToDisk(employees);
+      updated = true;
+    } else {
+      console.warn(`Deleted photo for ${empId} but no matching employee record found.`);
+    }
+
+    return res.json({ success: true, updated });
+  } catch (err) {
+    console.error('Failed to delete employee photo:', err);
+    return res.status(500).json({ error: 'Failed to delete photo' });
   }
 });
 

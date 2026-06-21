@@ -607,7 +607,7 @@ function App() {
                       />
                     </div>
                     {isAdmin ? (
-                      <div className="photo-field-actions">
+                      <div className="photo-field-actions photo-field-actions-bottom">
                         <label className="file-input-label">
                           <span>Set photo</span>
                           <input

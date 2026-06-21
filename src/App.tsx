@@ -565,9 +565,9 @@ function App() {
   };
 
   const handleDeleteSource = async () => {
-    const confirmed = window.confirm('Delete the uploaded source file? Employee records and saved photos will remain available.');
+    const confirmed = window.confirm('Delete all employee data? Photos and saved QR previews will remain available.');
 
-    setUploadMessage('Deleting uploaded source file...');
+    setUploadMessage('Deleting employee data...');
 
     try {
       const response = await fetch(`${API_BASE}/source`, {
@@ -708,7 +708,7 @@ function App() {
                   </div>
                   <div className="admin-actions">
                     <button className="delete-button" type="button" onClick={handleDeleteSource}>
-                      Delete stored source file only
+                      Delete all employee data
                     </button>
                   </div>
                   {uploadMessage && <p className="upload-message">{uploadMessage}</p>}

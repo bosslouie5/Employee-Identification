@@ -389,7 +389,12 @@ app.delete('/api/source', (req, res) => {
     if (fs.existsSync(SOURCE_FILE)) {
       fs.unlinkSync(SOURCE_FILE);
     }
-    return res.json({ success: true, message: 'Source file deleted. Employee directory and photos are preserved.' });
+    if (fs.existsSync(DATA_FILE)) {
+      fs.unlinkSync(DATA_FILE);
+    }
+    employees = [];
+    saveEmployeesToDisk(employees);
+    return res.json({ success: true, message: 'Source file and employee data deleted. Saved QR profiles remain accessible.' });
   } catch (error) {
     console.error('Failed to delete source file:', error);
     return res.status(500).json({ error: 'Failed to delete source file' });

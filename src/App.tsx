@@ -606,20 +606,22 @@ function App() {
                         alt="Photo preview"
                       />
                     </div>
-                    <div className="photo-field-actions">
-                      <label className="file-input-label">
-                        <span>Set photo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="file-input"
-                          onChange={(e) => handleUploadEmployeePhoto('photo', e.target.files?.[0])}
-                        />
-                      </label>
-                      <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('photo')}>
-                        Delete
-                      </button>
-                    </div>
+                    {isAdmin ? (
+                      <div className="photo-field-actions">
+                        <label className="file-input-label">
+                          <span>Set photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="file-input"
+                            onChange={(e) => handleUploadEmployeePhoto('photo', e.target.files?.[0])}
+                          />
+                        </label>
+                        <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('photo')}>
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

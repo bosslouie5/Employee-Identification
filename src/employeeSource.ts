@@ -5,16 +5,15 @@ export type Employee = {
   positionTitle: string;
   department: string;
   subDepartment: string;
-  costCentreCode: string;
-  phoneNumber: string;
+  division: string;
+  companyName: string;
+  location: string;
+  nationality: string;
+  dateOfBirth: string;
+  homePage: string;
   emailAddress: string;
   gender: string;
   reportsTo: string;
-  companyName: string;
-  companyCode: string;
-  companyDisplay: string;
-  role: string;
-  location: string;
   photoUrl: string;
   idPhoto1: string;
   idPhoto2: string;
@@ -30,16 +29,15 @@ export const employees: Employee[] = [
     positionTitle: 'Staff Coordinator',
     department: 'HR & Admin',
     subDepartment: 'People Operations',
-    costCentreCode: 'CC-101',
-    phoneNumber: '+63 912 345 6789',
+    division: 'People Experience',
+    companyName: 'Masdar',
+    location: 'Abu Dhabi',
+    nationality: 'Filipino',
+    dateOfBirth: '18-Jun-1991',
+    homePage: 'http://www.masdar.co',
     emailAddress: 'aileen.santos@example.com',
     gender: 'Female',
     reportsTo: 'Ana Cruz',
-    companyName: 'MTS',
-    companyCode: '5000',
-    companyDisplay: 'MTS (5000-MTS)',
-    role: 'Staff Coordinator',
-    location: 'Makati HQ',
     photoUrl: '',
     idPhoto1: '',
     idPhoto2: '',
@@ -53,16 +51,15 @@ export const employees: Employee[] = [
     positionTitle: 'Systems Analyst',
     department: 'IT Operations',
     subDepartment: 'Infrastructure',
-    costCentreCode: 'CC-202',
-    phoneNumber: '+63 917 654 3210',
+    division: 'Digital Services',
+    companyName: 'Masdar',
+    location: 'Dubai',
+    nationality: 'Filipino',
+    dateOfBirth: '04-Nov-1988',
+    homePage: 'http://www.masdar.co',
     emailAddress: 'miguel.reyes@example.com',
     gender: 'Male',
     reportsTo: 'Joan Delacruz',
-    companyName: 'MTS',
-    companyCode: '5000',
-    companyDisplay: 'MTS (5000-MTS)',
-    role: 'Systems Analyst',
-    location: 'BGC Campus',
     photoUrl: '',
     idPhoto1: '',
     idPhoto2: '',
@@ -83,15 +80,13 @@ export function searchEmployees(items: Employee[], query: string) {
       item.positionTitle,
       item.department,
       item.subDepartment,
-      item.costCentreCode,
-      item.phoneNumber,
+      item.division,
+      item.companyName,
+      item.location,
+      item.nationality,
       item.emailAddress,
       item.gender,
       item.reportsTo,
-      item.companyName,
-      item.companyDisplay,
-      item.role,
-      item.location,
     ]
       .join(' ')
       .toLowerCase()

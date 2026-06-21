@@ -31,10 +31,23 @@ function App() {
     ? 'Upload source files and manage employee data. This area is restricted to admins only.'
     : 'Search employee records and view information. No upload or edit access is available here.';
 
-  const filtered = useMemo(
-    () => (query.trim() ? searchEmployees(employees, query) : []),
-    [employees, query]
-  );
+  const filtered = useMemo(() => (query.trim() ? searchEmployees(employees, query) : []), [employees, query]);
+
+  useEffect(() => {
+    async function fetchDefault() {
+      try {
+        const res = await fetch(`${API_BASE}/admin/default-photo`, { headers: { 'x-admin-token': ADMIN_CODE } });
+        if (!res.ok) return;
+        const j = await res.json();
+        setDefaultPhotoExists(!!j.exists);
+        setDefaultPhotoUrl(j.url || null);
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    fetchDefault();
+  }, []);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -63,9 +76,7 @@ function App() {
   }, [employees, activeData]);
 
   const reportsToEmail = reportsToManager?.emailAddress || '';
-  const heroPhotoUrl = activeData?.photoUrl?.trim()
-    ? activeData.photoUrl
-    : defaultPhotoUrl || DEFAULT_AVATAR;
+  const heroPhotoUrl = activeData?.photoUrl?.trim() ? activeData.photoUrl : defaultPhotoUrl || DEFAULT_AVATAR;
   const employeeCount = employees.length;
   const resultsCount = filtered.length;
 
@@ -97,22 +108,6 @@ function App() {
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
-
-  useEffect(() => {
-    async function fetchDefault() {
-      try {
-        const res = await fetch(`${API_BASE}/admin/default-photo`, { headers: { 'x-admin-token': ADMIN_CODE } });
-        if (!res.ok) return;
-        const j = await res.json();
-        setDefaultPhotoExists(!!j.exists);
-        setDefaultPhotoUrl(j.url || null);
-      } catch (err) {
-        // ignore
-      }
-    }
-
-    fetchDefault();
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -522,7 +517,9 @@ function App() {
                   <h3>{activeData.fullName}</h3>
 
                   <div className="selection-meta">
-                    <span className="selection-role">{activeData.positionTitle} · {activeData.department}</span>
+                    <span className="selection-role">{activeData.positionTitle}</span>
+                    <span>{activeData.department}</span>
+                    <span>{activeData.location}</span>
                   </div>
                   <p className="selection-status">{activeData.status}</p>
                 </div>
@@ -535,7 +532,11 @@ function App() {
                 </div>
                 <div className="field-block">
                   <label>Company</label>
-                  <p>{activeData.companyDisplay}</p>
+                  <p>{activeData.companyName || '—'}</p>
+                </div>
+                <div className="field-block">
+                  <label>Division</label>
+                  <p>{activeData.division || '—'}</p>
                 </div>
               </div>
 
@@ -548,6 +549,10 @@ function App() {
                   <label>Department</label>
                   <p>{activeData.department}</p>
                 </div>
+                <div className="field-block">
+                  <label>Sub Department</label>
+                  <p>{activeData.subDepartment || '—'}</p>
+                </div>
               </div>
 
               <div className="field-grid">
@@ -556,29 +561,22 @@ function App() {
                   <p>{activeData.gender}</p>
                 </div>
                 <div className="field-block">
-                  <label>Sub Department</label>
-                  <p>{activeData.subDepartment}</p>
-                </div>
-              </div>
-
-              <div className="field-grid">
-                <div className="field-block">
-                  <label>Phone</label>
-                  <p>{activeData.phoneNumber}</p>
+                  <label>Nationality</label>
+                  <p>{activeData.nationality || '—'}</p>
                 </div>
                 <div className="field-block">
-                  <label>Cost Centre Code</label>
-                  <p>{activeData.costCentreCode}</p>
+                  <label>Date of Birth</label>
+                  <p>{activeData.dateOfBirth || '—'}</p>
                 </div>
               </div>
 
               <div className="field-grid">
                 <div className="field-block">
                   <label>Email</label>
-                  <p>{activeData.emailAddress}</p>
+                  <p>{activeData.emailAddress || '—'}</p>
                 </div>
                 <div className="field-block">
-                  <label>Location Group</label>
+                  <label>Location</label>
                   <p>{activeData.location}</p>
                 </div>
               </div>
@@ -593,7 +591,13 @@ function App() {
                     ) : null}
                   </div>
                 </div>
-                <div className="field-block blank-field">&nbsp;</div>
+                <div className="field-block">
+                  <label>Home page</label>
+                  <p><a href={activeData.homePage || 'http://www.masdar.co'} target="_blank" rel="noreferrer">{activeData.homePage || 'http://www.masdar.co'}</a></p>
+                </div>
+                <div className="field-block blank-field">
+                  <p>&nbsp;</p>
+                </div>
               </div>
 
               <div className="upload-grid">

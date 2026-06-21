@@ -364,14 +364,15 @@ button {
 
 .hero-card {
   display: grid;
-  grid-template-columns: 104px 1fr;
-  gap: 20px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 24px;
   align-items: center;
-  padding: 26px;
-  border-radius: 30px;
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(15, 23, 42, 0.48));
-  border: 1px solid rgba(56, 189, 248, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  padding: 30px;
+  border-radius: 34px;
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.16), rgba(15, 23, 42, 0.7));
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 30px 90px rgba(2, 8, 20, 0.28);
 }
 
 .hero-copy {
@@ -382,13 +383,21 @@ button {
 .selection-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   color: #cbd5e1;
-  font-size: 0.95rem;
+  font-size: 0.94rem;
+}
+
+.selection-meta span {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .selection-role {
-  color: #94a3b8;
+  color: #e2e8f0;
+  font-weight: 700;
 }
 
 .selection-status {

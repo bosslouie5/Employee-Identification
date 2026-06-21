@@ -21,11 +21,41 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+function normalizeEmployeeRecord(record) {
+  return {
+    status: record.status || 'Active',
+    id: record.id || '',
+    fullName: record.fullName || record.name || record.displayName || '',
+    positionTitle: record.positionTitle || record.title || '',
+    department: record.department || '',
+    subDepartment: record.subDepartment || record.sub_department || '',
+    division: record.division || '',
+    companyName: record.companyName || record.company || record.companyDisplay || '',
+    companyCode: record.companyCode || '',
+    companyDisplay: record.companyDisplay || record.companyName || '',
+    location: record.location || '',
+    nationality: record.nationality || '',
+    dateOfBirth: record.dateOfBirth || '',
+    homePage: record.homePage || 'http://www.masdar.co',
+    phoneNumber: record.phoneNumber || '',
+    emailAddress: record.emailAddress || record.email || '',
+    gender: record.gender || '',
+    reportsTo: record.reportsTo || record.manager || '',
+    photoUrl: record.photoUrl || '',
+    idPhoto1: record.idPhoto1 || '',
+    idPhoto2: record.idPhoto2 || '',
+    pdfFile: record.pdfFile || '',
+    qrCodeData: record.qrCodeData || record.id || '',
+  };
+}
+
 function loadEmployeesFromDisk() {
   try {
     if (!fs.existsSync(DATA_FILE)) return [];
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeEmployeeRecord);
   } catch (error) {
     console.error('Failed to load employee data from disk:', error);
     return [];
@@ -100,50 +130,65 @@ function pickCompanyFields(row, headerMap) {
 }
 
 function parseRows(rows) {
-  const headerRow = rows[0];
-  const headerMap = buildHeaderMap(headerRow);
-
   return rows.slice(1).reduce((result, row) => {
     if (!row.some((cell) => String(cell || '').trim())) return result;
 
-    const status = getCellValue(row, headerMap, ['employee status']);
-    const employeeId = getCellValue(row, headerMap, ['user/employee id', 'user employee id', 'employee id']);
-    const fullName = getCellValue(row, headerMap, ['display name', 'name']);
-    const positionTitle = getCellValue(row, headerMap, ['position title', 'title', 'position']);
-    const phoneNumber = getCellValue(row, headerMap, ['mobile formatted phone number', 'mobile phone number', 'phone number', 'phone']);
-    const emailAddress = getCellValue(row, headerMap, ['business email information email address', 'business email address', 'email address', 'email']);
-    const gender = getCellValue(row, headerMap, ['gender']);
-    const reportsTo = getCellValue(row, headerMap, ['reports to', 'manager', 'supervisor']);
-    const department = getCellValue(row, headerMap, ['department']);
-    const subDepartment = getCellValue(row, headerMap, ['sub department', 'sub-department', 'sub department name']);
-    const costCentreCode = getCellValue(row, headerMap, ['cost centre code', 'cost center code', 'cost centre', 'cost center']);
-    const { companyName, companyCode, companyDisplay } = pickCompanyFields(row, headerMap);
+    const employeeId = String(row[1] || '').trim(); // Column B
+    const fullName = String(row[2] || '').trim() || String(row[0] || '').trim();
+    const gender = String(row[9] || '').trim(); // Column J
+    const positionTitle = String(row[20] || '').trim(); // Column U
+    const dateOfBirthRaw = row[22]; // Column W
+    const department = String(row[16] || '').trim(); // Column Q
+    const nationality = String(row[12] || '').trim(); // Column M
+    const subDepartment = String(row[17] || '').trim(); // Column R
+    const division = String(row[15] || '').trim(); // Column P
+    const emailAddress = String(row[36] || '').trim(); // Column AK
+    const reportsTo = String(row[33] || '').trim(); // Column AH
+    const companyName = String(row[13] || '').trim(); // Column N
+    const location = String(row[31] || '').trim(); // Column AF
+    const status = 'Active';
+    const homePage = 'http://www.masdar.co';
+
+    const dateOfBirth = (() => {
+      if (dateOfBirthRaw instanceof Date && !Number.isNaN(dateOfBirthRaw.getTime())) {
+        return dateOfBirthRaw.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      if (typeof dateOfBirthRaw === 'number') {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        const date = new Date(excelEpoch.getTime() + dateOfBirthRaw * 86400000);
+        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      const text = String(dateOfBirthRaw || '').trim();
+      const parsed = new Date(text);
+      return !Number.isNaN(parsed.getTime())
+        ? parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : text;
+    })();
 
     const id = employeeId || `EMP-${result.length + 1}`;
 
-    result.push({
+    result.push(normalizeEmployeeRecord({
       status,
       id,
-      fullName,
+      fullName: fullName || `Employee ${result.length + 1}`,
       positionTitle,
       department,
       subDepartment,
-      costCentreCode,
-      phoneNumber,
+      division,
+      companyName,
+      location,
+      nationality,
+      dateOfBirth,
+      homePage,
       emailAddress,
       gender,
       reportsTo,
-      companyName,
-      companyCode,
-      companyDisplay,
-      role: positionTitle,
-      location: companyDisplay || department,
       photoUrl: '',
       idPhoto1: '',
       idPhoto2: '',
       pdfFile: '',
       qrCodeData: employeeId || id,
-    });
+    }));
 
     return result;
   }, []);
@@ -157,7 +202,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/employees', (req, res) => {
-  res.json({ employees });
+  res.json({ employees: employees.map(normalizeEmployeeRecord) });
 });
 
 app.post('/api/upload', upload.single('file'), (req, res) => {

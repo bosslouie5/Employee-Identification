@@ -14,6 +14,8 @@ export default function Preview() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let intervalId: number | null = null;
+
     async function load() {
       setLoading(true);
       setError('');
@@ -26,6 +28,20 @@ export default function Preview() {
           return;
         }
 
+        // Try localStorage first for offline support
+        const stored = localStorage.getItem(`employee_${id}`);
+        if (stored) {
+          try {
+            const emp = JSON.parse(stored);
+            setEmployee(emp);
+            setLoading(false);
+            return;
+          } catch (e) {
+            // ignore parse error
+          }
+        }
+
+        // Fall back to API
         const res = await fetch('/api/employees');
         if (!res.ok) throw new Error('Failed to fetch');
         const j = await res.json();
@@ -44,6 +60,11 @@ export default function Preview() {
     }
 
     load();
+    intervalId = setInterval(load, 4000);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   if (loading) return <div style={{ padding: 32 }}>Loading preview…</div>;
@@ -60,7 +81,7 @@ export default function Preview() {
       >
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <div style={{ width: 110, height: 110, borderRadius: 16, overflow: 'hidden', background: '#0f172a', border: '1px solid rgba(148,163,184,0.06)' }}>
-            <img src={employee.photoUrl || '/data/default.png'} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={employee.photoUrl || '/data/default.png'} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#0f172a' }} />
           </div>
 
           <div style={{ flex: 1 }}>

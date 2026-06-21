@@ -231,6 +231,98 @@ button {
   transform: translateZ(0);
 }
 
+.crop-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  padding: 20px;
+}
+
+.crop-modal {
+  width: min(560px, 100%);
+  border-radius: 28px;
+  overflow: hidden;
+  background: #08111f;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+}
+
+.crop-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.crop-modal-label {
+  margin: 0 0 4px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crop-modal h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #f8fafc;
+}
+
+.cropper-wrapper {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  background: #0c1728;
+}
+
+.crop-controls {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.slider-row {
+  display: grid;
+  gap: 10px;
+}
+
+.slider-row label {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+}
+
+.slider-row input {
+  width: 100%;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.cancel-button,
+.save-button {
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.cancel-button {
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
+.save-button {
+  background: linear-gradient(135deg, #38bdf8, #818cf8);
+  color: #020617;
+}
+
 .search-card input {
   width: 100%;
   border: none;

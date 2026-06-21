@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Cropper, { Area } from 'react-easy-crop';
 import QRCode from 'react-qr-code';
 import { Employee, employees as defaultEmployees, searchEmployees } from './employeeSource';
 import { parseExcelFile } from './excelParser';
@@ -10,6 +11,11 @@ const DEFAULT_AVATAR =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="24" fill="%2310202e"/><circle cx="60" cy="40" r="24" fill="%2394a3b8"/><path d="M30 100c0-18 14-32 30-32s30 14 30 32" fill="%2394a3b8"/></svg>';
 
 const isAdminRoute = typeof window !== 'undefined' && window.location.pathname === '/admin';
+
+const cacheBustUrl = (url: string | null) => {
+  if (!url) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+};
 
 function App() {
   const [employees, setEmployees] = useState<Employee[]>(defaultEmployees);
@@ -25,7 +31,15 @@ function App() {
   const [defaultPhotoPreview, setDefaultPhotoPreview] = useState<string | null>(null);
   const [photoFieldPreview, setPhotoFieldPreview] = useState<string | null>(null);
   const [defaultPhotoExists, setDefaultPhotoExists] = useState(false);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [selectedImageField, setSelectedImageField] = useState<string | null>(null);
   const [qrMessage, setQrMessage] = useState('');
+  const [lastUpdate, setLastUpdate] = useState<number>(0);
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
@@ -35,35 +49,35 @@ function App() {
 
   const filtered = useMemo(() => (query.trim() ? searchEmployees(employees, query) : []), [employees, query]);
 
-  useEffect(() => {
-    async function fetchDefault() {
-      try {
-        const res = await fetch(`${API_BASE}/admin/default-photo`, { headers: { 'x-admin-token': ADMIN_CODE } });
-        if (!res.ok) return;
-        const j = await res.json();
-        setDefaultPhotoExists(!!j.exists);
-        setDefaultPhotoUrl(j.url || null);
-      } catch (err) {
-        // ignore
-      }
+  const fetchDefault = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/default-photo`, { headers: { 'x-admin-token': ADMIN_CODE } });
+      if (!res.ok) return;
+      const j = await res.json();
+      setDefaultPhotoExists(!!j.exists);
+      setDefaultPhotoUrl(cacheBustUrl(j.url) || null);
+    } catch (err) {
+      // ignore
     }
-
-    fetchDefault();
   }, []);
 
   useEffect(() => {
     if (!query.trim()) {
+      return;
+    }
+
+    if (filtered.length === 0) {
       setActive(null);
       return;
     }
 
-    if (filtered.length > 0 && !active) {
-      setActive(filtered[0]);
-    } else if (filtered.length > 0 && active && !filtered.find((e) => e.id === active.id)) {
-      setActive(filtered[0]);
-    } else if (filtered.length === 0) {
-      setActive(null);
+    const matching = filtered.find((e) => e.id === active?.id);
+    if (matching) {
+      setActive(matching);
+      return;
     }
+
+    setActive(filtered[0]);
   }, [filtered, active, query]);
 
   useEffect(() => {
@@ -82,7 +96,9 @@ function App() {
   }, [employees, activeData]);
 
   const reportsToEmail = reportsToManager?.emailAddress || '';
-  const heroPhotoUrl = activeData?.photoUrl?.trim() ? activeData.photoUrl : defaultPhotoUrl || DEFAULT_AVATAR;
+  const heroPhotoUrl = activeData?.photoUrl?.trim() 
+    ? cacheBustUrl(activeData.photoUrl) || DEFAULT_AVATAR
+    : cacheBustUrl(defaultPhotoUrl) || DEFAULT_AVATAR;
   const employeeCount = employees.length;
   const resultsCount = filtered.length;
 
@@ -151,6 +167,11 @@ function App() {
             setQrMessage('Failed to save QR code.');
             return;
           }
+          // Store employee data for offline preview
+          localStorage.setItem(
+            `employee_${activeData.id}`,
+            JSON.stringify(activeData)
+          );
           const downloadUrl = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = downloadUrl;
@@ -159,7 +180,7 @@ function App() {
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(downloadUrl);
-          setQrMessage('QR code downloaded as PNG. Save this file for quick access.');
+          setQrMessage('QR code downloaded as PNG. Works offline once saved!');
         }, 'image/png');
       };
 
@@ -172,6 +193,103 @@ function App() {
     } catch (err) {
       setQrMessage('Error saving QR code. Try again.');
     }
+  };
+
+  const onCropComplete = useCallback((_: Area, croppedArea: Area) => {
+    setCroppedAreaPixels(croppedArea);
+  }, []);
+
+  const createImage = (url: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+
+  const getCroppedImg = async (imageSrc: string, pixelCrop: Area) => {
+    const image = await createImage(imageSrc);
+    const maxSize = 696;
+    const cropSize = Math.min(pixelCrop.width, pixelCrop.height, maxSize);
+    const outputWidth = Math.round(cropSize);
+    const outputHeight = Math.round(cropSize);
+    const canvas = document.createElement('canvas');
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas context not available');
+
+    ctx.drawImage(
+      image,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
+      0,
+      0,
+      outputWidth,
+      outputHeight
+    );
+
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) return reject(new Error('Canvas is empty'));
+        resolve(blob);
+      }, 'image/png');
+    });
+  };
+
+  const handleSelectPhotoFile = (field: string, file?: File) => {
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedImageFile(file);
+    setSelectedImageUrl(previewUrl);
+    setSelectedImageField(field);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setCropModalOpen(true);
+  };
+
+  const handleConfirmCrop = async () => {
+    if (!selectedImageUrl || !croppedAreaPixels || !selectedImageField || !selectedImageFile) return;
+    if (selectedImageField !== 'defaultPhoto' && !activeData) return;
+    try {
+      const blob = await getCroppedImg(selectedImageUrl, croppedAreaPixels);
+      const croppedFile = new File([blob], selectedImageFile.name.replace(/\.[^.]+$/, '.png'), {
+        type: 'image/png',
+      });
+      if (selectedImageField === 'photo') {
+        const preview = URL.createObjectURL(croppedFile);
+        setPhotoFieldPreview(preview);
+      }
+      if (selectedImageField === 'defaultPhoto') {
+        const preview = URL.createObjectURL(croppedFile);
+        setDefaultPhotoPreview(preview);
+      }
+      const field = selectedImageField;
+      setCropModalOpen(false);
+      if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
+      setSelectedImageFile(null);
+      setSelectedImageUrl(null);
+      setSelectedImageField(null);
+
+      if (field === 'defaultPhoto') {
+        await handleUploadDefaultPhotoFile(croppedFile);
+      } else {
+        await handleUploadEmployeePhoto(field, croppedFile);
+      }
+    } catch (err) {
+      setUploadMessage('Failed to crop the image. Try a different photo.');
+    }
+  };
+
+  const handleCancelCrop = () => {
+    setCropModalOpen(false);
+    if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
+    setSelectedImageFile(null);
+    setSelectedImageUrl(null);
+    setSelectedImageField(null);
   };
 
   const fetchEmployees = useCallback(async () => {
@@ -187,6 +305,7 @@ function App() {
       if (Array.isArray(result.employees)) {
         setEmployees(result.employees);
         setUploadMessage('');
+        setLastUpdate(Date.now());
         return result.employees;
       }
       return null;
@@ -201,18 +320,32 @@ function App() {
 
   useEffect(() => {
     fetchEmployees();
-  }, [fetchEmployees]);
+    fetchDefault();
+  }, [fetchEmployees, fetchDefault]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       fetchEmployees();
-    }, 10000);
+      fetchDefault();
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchEmployees]);
+  }, [fetchEmployees, fetchDefault]);
+
+  useEffect(() => {
+    if (!activeData) return;
+    const updated = employees.find((item) => item.id === activeData.id);
+    if (updated && updated !== activeData) {
+      setActive(updated);
+    }
+    if (!updated) {
+      setActive(null);
+    }
+  }, [employees, activeData]);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
       setUploadMessage('Please upload a valid Excel file (.xlsx or .xls).');
@@ -261,13 +394,9 @@ function App() {
     }
   };
 
-  const handleUploadDefaultPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleUploadDefaultPhotoFile = async (file: File) => {
     const previewUrl = URL.createObjectURL(file);
     setDefaultPhotoPreview(previewUrl);
-    setDefaultPhotoUrl(previewUrl);
     setDefaultPhotoExists(true);
 
     try {
@@ -281,7 +410,7 @@ function App() {
       const j = await res.json();
       if (res.ok) {
         setDefaultPhotoExists(true);
-        setDefaultPhotoUrl(j.url || previewUrl);
+        setDefaultPhotoUrl(cacheBustUrl(j.url || previewUrl));
         setDefaultPhotoPreview(null);
         setUploadMessage('Default photo uploaded successfully.');
       } else {
@@ -299,6 +428,17 @@ function App() {
         'Failed to upload default photo. Check that the backend server is running at http://localhost:4000.'
       );
     }
+  };
+
+  const handleImageInput = (field: string, e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    handleSelectPhotoFile(field, file);
+    e.target.value = '';
+  };
+
+  const handleUploadDefaultPhoto = (e: ChangeEvent<HTMLInputElement>) => {
+    handleImageInput('defaultPhoto', e);
   };
 
   const handleDeleteDefaultPhoto = async () => {
@@ -340,7 +480,12 @@ function App() {
         const newList = await fetchEmployees();
         if (newList && activeData) {
           const updated = newList.find((e: Employee) => e.id === activeData.id);
-          if (updated) setActive(updated);
+          if (updated) {
+            if (updated.photoUrl) {
+              updated.photoUrl = cacheBustUrl(updated.photoUrl);
+            }
+            setActive(updated);
+          }
         }
         if (field === 'photo') {
           setPhotoFieldPreview(null);
@@ -566,7 +711,7 @@ function App() {
               placeholder="Search by status, name, ID, department, company or code"
             />
 
-            <div className="search-results">
+            <div className="search-results" key={lastUpdate}>
               {!query.trim() ? (
                 <p className="empty-state">Start typing to search the employee directory.</p>
               ) : filtered.length ? (
@@ -577,7 +722,7 @@ function App() {
                     className={item.id === activeData?.id ? 'search-item active' : 'search-item'}
                     onClick={() => setActive(item)}
                   >
-                    <img src={item.photoUrl?.trim() ? item.photoUrl : (defaultPhotoUrl || DEFAULT_AVATAR)} alt="avatar" className="search-avatar" />
+                    <img src={cacheBustUrl(item.photoUrl?.trim() ? item.photoUrl : (defaultPhotoUrl || DEFAULT_AVATAR)) || DEFAULT_AVATAR} alt="avatar" className="search-avatar" />
                     <div className="search-item-content">
                       <strong>{item.fullName}</strong>
                       <span>{item.id}</span>
@@ -700,7 +845,7 @@ function App() {
                   <div className="photo-field-row">
                     <div className="photo-field-preview">
                       <img
-                        src={photoFieldPreview || activeData?.photoUrl || DEFAULT_AVATAR}
+                        src={photoFieldPreview || cacheBustUrl(activeData?.photoUrl) || DEFAULT_AVATAR}
                         alt="Photo preview"
                       />
                     </div>
@@ -712,7 +857,7 @@ function App() {
                             type="file"
                             accept="image/*"
                             className="file-input"
-                            onChange={(e) => handleUploadEmployeePhoto('photo', e.target.files?.[0])}
+                            onChange={(e) => handleImageInput('photo', e)}
                           />
                         </label>
                         <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('photo')}>
@@ -729,7 +874,7 @@ function App() {
                     <div className="upload-actions">
                       <label className="file-input-label">
                         <span>Upload ID front</span>
-                        <input type="file" accept="image/*" className="file-input" onChange={(e) => handleUploadEmployeePhoto('id1', e.target.files?.[0])} />
+                        <input type="file" accept="image/*" className="file-input" onChange={(e) => handleImageInput('id1', e)} />
                       </label>
                       <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('id1')}>
                         Delete
@@ -746,7 +891,7 @@ function App() {
                     <div className="upload-actions">
                       <label className="file-input-label">
                         <span>Upload ID back</span>
-                        <input type="file" accept="image/*" className="file-input" onChange={(e) => handleUploadEmployeePhoto('id2', e.target.files?.[0])} />
+                        <input type="file" accept="image/*" className="file-input" onChange={(e) => handleImageInput('id2', e)} />
                       </label>
                       <button className="delete-button" type="button" onClick={() => handleDeleteEmployeePhoto('id2')}>
                         Delete
@@ -823,6 +968,55 @@ function App() {
           </motion.div>
         </section>
       </main>
+
+      {cropModalOpen && selectedImageUrl ? (
+        <div className="crop-modal-overlay">
+          <div className="crop-modal">
+            <div className="crop-modal-header">
+              <div>
+                <p className="crop-modal-label">Crop image</p>
+                <h3>{selectedImageField === 'defaultPhoto' ? 'Default profile photo' : selectedImageField === 'photo' ? 'Employee photo' : selectedImageField === 'id1' ? 'ID front photo' : selectedImageField === 'id2' ? 'ID back photo' : 'Upload image'}</h3>
+              </div>
+              <button className="cancel-button" type="button" onClick={handleCancelCrop}>X</button>
+            </div>
+            <div className="cropper-wrapper">
+              <Cropper
+                image={selectedImageUrl}
+                crop={crop}
+                zoom={zoom}
+                aspect={1 / 1}
+                cropShape="rect"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            </div>
+            <div className="crop-controls">
+              <div className="slider-row">
+                <label htmlFor="zoom-range">Zoom</label>
+                <input
+                  id="zoom-range"
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.05}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="cancel-button" type="button" onClick={handleCancelCrop}>
+                  Cancel
+                </button>
+                <button className="save-button" type="button" onClick={handleConfirmCrop}>
+                  Save & Upload
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

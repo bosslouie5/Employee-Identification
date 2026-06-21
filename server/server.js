@@ -219,7 +219,39 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    // Preserve current employees so we can merge existing photos
+    const previousEmployees = Array.isArray(employees) ? employees.slice() : [];
     employees = parseRows(rows);
+
+    // Ensure photos directory exists
+    const photosDir = path.join(DATA_DIR, 'photos');
+    const available = fs.existsSync(photosDir) ? fs.readdirSync(photosDir) : [];
+
+    // For each newly parsed employee, try to preserve any existing photo references
+    employees = employees.map((emp) => {
+      const prev = previousEmployees.find((p) => p.id === emp.id);
+      if (prev) {
+        if (prev.photoUrl) emp.photoUrl = prev.photoUrl;
+        if (prev.idPhoto1) emp.idPhoto1 = prev.idPhoto1;
+        if (prev.idPhoto2) emp.idPhoto2 = prev.idPhoto2;
+      }
+
+      // If no previous record contained photo links, probe the photos folder for matching files
+      if (!emp.photoUrl) {
+        const match = available.find((n) => n.startsWith(`${emp.id}-photo`));
+        if (match) emp.photoUrl = `/data/photos/${match}`;
+      }
+      if (!emp.idPhoto1) {
+        const match = available.find((n) => n.startsWith(`${emp.id}-id1`));
+        if (match) emp.idPhoto1 = `/data/photos/${match}`;
+      }
+      if (!emp.idPhoto2) {
+        const match = available.find((n) => n.startsWith(`${emp.id}-id2`));
+        if (match) emp.idPhoto2 = `/data/photos/${match}`;
+      }
+
+      return emp;
+    });
     saveEmployeesToDisk(employees);
     return res.json({ success: true, imported: employees.length });
   } catch (error) {

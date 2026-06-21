@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { Employee, employees as defaultEmployees, searchEmployees } from './employeeSource';
 import { parseExcelFile } from './excelParser';
@@ -25,6 +25,8 @@ function App() {
   const [defaultPhotoPreview, setDefaultPhotoPreview] = useState<string | null>(null);
   const [photoFieldPreview, setPhotoFieldPreview] = useState<string | null>(null);
   const [defaultPhotoExists, setDefaultPhotoExists] = useState(false);
+  const [qrMessage, setQrMessage] = useState('');
+  const qrWrapperRef = useRef<HTMLDivElement | null>(null);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
   const pageSubTitle = isAdminRoute
@@ -64,6 +66,10 @@ function App() {
     }
   }, [filtered, active, query]);
 
+  useEffect(() => {
+    setQrMessage('');
+  }, [active?.id]);
+
   const activeData = active || null;
 
   const reportsToManager = useMemo(() => {
@@ -79,6 +85,92 @@ function App() {
   const heroPhotoUrl = activeData?.photoUrl?.trim() ? activeData.photoUrl : defaultPhotoUrl || DEFAULT_AVATAR;
   const employeeCount = employees.length;
   const resultsCount = filtered.length;
+
+  const buildQrUrl = (employeeId: string) => {
+    if (typeof window === 'undefined') return '';
+    const url = new URL(window.location.href);
+    url.searchParams.set('id', employeeId);
+    return url.toString();
+  };
+
+  const getActiveQrUrl = () => {
+    if (!activeData) return '';
+    return buildQrUrl(activeData.id);
+  };
+
+  const handleCopyQr = async () => {
+    if (!activeData) return;
+    try {
+      await navigator.clipboard.writeText(getActiveQrUrl());
+      setQrMessage('Profile QR link copied to clipboard.');
+    } catch (err) {
+      setQrMessage('Could not copy the QR link. Scan the code directly instead.');
+    }
+  };
+
+  const handlePreviewProfile = () => {
+    if (!activeData) return;
+    window.open(getActiveQrUrl(), '_blank');
+  };
+
+  const handleSaveQr = () => {
+    if (!activeData || !qrWrapperRef.current) return;
+
+    const svg = qrWrapperRef.current.querySelector('svg');
+    if (!svg) {
+      setQrMessage('Unable to save QR code. Try again after selecting an employee.');
+      return;
+    }
+
+    try {
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setQrMessage('Failed to save QR code. Browser canvas not supported.');
+        return;
+      }
+
+      const img = new Image();
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(svgUrl);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            setQrMessage('Failed to save QR code.');
+            return;
+          }
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = `${activeData.id}-employee-qr.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(downloadUrl);
+          setQrMessage('QR code downloaded as PNG. Save this file for quick access.');
+        }, 'image/png');
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+        setQrMessage('Failed to convert QR code to image.');
+      };
+
+      img.src = svgUrl;
+    } catch (err) {
+      setQrMessage('Error saving QR code. Try again.');
+    }
+  };
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -696,19 +788,34 @@ function App() {
           >
             {activeData ? (
               <>
-                <div className="qr-box">
-                  <QRCode value={activeData.qrCodeData || 'N/A'} size={168} bgColor="#f8fafc" fgColor="#0f172a" />
+                <div className="qr-actions-row">
+                  <button className="copy-button" type="button" onClick={handleCopyQr}>
+                    Copy QR link
+                  </button>
+                  <button className="preview-button" type="button" onClick={handlePreviewProfile}>
+                    Preview profile
+                  </button>
+                  <button className="save-button" type="button" onClick={handleSaveQr}>
+                    Save QR code
+                  </button>
                 </div>
-                <p className="qr-detail">Scan to preview the employee ID or synchronize the record instantly.</p>
+
+                <div className="qr-box" ref={qrWrapperRef}>
+                  <QRCode value={getActiveQrUrl()} size={192} bgColor="#f8fafc" fgColor="#0f172a" />
+                </div>
+                <p className="qr-detail">
+                  Scan this QR to open the employee profile directly.
+                </p>
+                {qrMessage ? <p className="qr-message">{qrMessage}</p> : null}
                 <div className="qr-meta">
                   <span>{activeData.id}</span>
                   <span>{activeData.location}</span>
                 </div>
               </>
             ) : (
-              <div className="qr-placeholder-card">
-                <div className="qr-empty-graphic" />
-                <p className="qr-detail">No QR token shown until a search result is selected.</p>
+              <div className="qr-empty-state">
+                <p>QR profile is empty.</p>
+                <span>Search or select an employee to view the profile QR.</span>
               </div>
             )}
           </motion.div>

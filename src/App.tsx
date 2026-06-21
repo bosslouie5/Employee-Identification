@@ -63,6 +63,7 @@ function App() {
 
   useEffect(() => {
     if (!query.trim()) {
+      setActive(null);
       return;
     }
 

@@ -89,6 +89,8 @@ function App() {
   const buildQrUrl = (employeeId: string) => {
     if (typeof window === 'undefined') return '';
     const url = new URL(window.location.href);
+    // ensure QR links go to a dedicated preview route
+    url.pathname = '/preview';
     url.searchParams.set('id', employeeId);
     return url.toString();
   };

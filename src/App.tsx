@@ -131,7 +131,7 @@ function App() {
     window.open(getActiveQrUrl(), '_blank');
   };
 
-  const handleSaveQr = () => {
+  const handleSaveQr = async () => {
     if (!activeData || !qrWrapperRef.current) return;
 
     const svg = qrWrapperRef.current.querySelector('svg');
@@ -154,7 +154,7 @@ function App() {
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
       const svgUrl = URL.createObjectURL(svgBlob);
 
-      img.onload = () => {
+      img.onload = async () => {
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.fillStyle = '#ffffff';
@@ -162,16 +162,17 @@ function App() {
         ctx.drawImage(img, 0, 0);
         URL.revokeObjectURL(svgUrl);
 
-        canvas.toBlob((blob) => {
+        canvas.toBlob(async (blob) => {
           if (!blob) {
             setQrMessage('Failed to save QR code.');
             return;
           }
-          // Store employee data for offline preview
-          localStorage.setItem(
-            `employee_${activeData.id}`,
-            JSON.stringify(activeData)
-          );
+
+          const photoSource = activeData.photoUrl?.trim() || defaultPhotoUrl || DEFAULT_AVATAR;
+          const cachedPhotoUrl = await convertToDataUrl(photoSource);
+          const savedEmployee = { ...activeData, photoUrl: cachedPhotoUrl };
+          localStorage.setItem(`employee_${activeData.id}`, JSON.stringify(savedEmployee));
+
           const downloadUrl = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = downloadUrl;
@@ -192,6 +193,24 @@ function App() {
       img.src = svgUrl;
     } catch (err) {
       setQrMessage('Error saving QR code. Try again.');
+    }
+  };
+
+  const convertToDataUrl = async (url: string) => {
+    if (!url) return url;
+    if (url.startsWith('data:')) return url;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return url;
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return url;
     }
   };
 

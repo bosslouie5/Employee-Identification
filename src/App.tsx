@@ -539,8 +539,7 @@ function App() {
   };
 
   const handleDeleteSource = async () => {
-    const confirmed = window.confirm('Delete the uploaded source file and clear server data?');
-    if (!confirmed) return;
+    const confirmed = window.confirm('Delete the uploaded source file? Employee records and saved photos will remain available.');
 
     setUploadMessage('Deleting uploaded source file...');
 
@@ -558,8 +557,7 @@ function App() {
         return;
       }
 
-      setEmployees([]);
-      setActive(null);
+      await fetchEmployees();
       setQuery('');
       setUploadMessage(result.message || 'Source file deleted successfully.');
     } catch (error) {
@@ -684,7 +682,7 @@ function App() {
                   </div>
                   <div className="admin-actions">
                     <button className="delete-button" type="button" onClick={handleDeleteSource}>
-                      Delete uploaded source file
+                      Delete stored source file only
                     </button>
                   </div>
                   {uploadMessage && <p className="upload-message">{uploadMessage}</p>}

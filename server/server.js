@@ -14,6 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'employees.json');
+const SOURCE_FILE = path.join(DATA_DIR, 'source.xlsx');
 const DIST_DIR = path.join(__dirname, '..', 'dist');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Admin12345';
 
@@ -219,6 +220,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    // Save the uploaded source file separately so photos stay preserved even when source is deleted
+    fs.writeFileSync(SOURCE_FILE, req.file.buffer);
     // Preserve current employees so we can merge existing photos
     const previousEmployees = Array.isArray(employees) ? employees.slice() : [];
     employees = parseRows(rows);
@@ -383,12 +386,10 @@ app.delete('/api/source', (req, res) => {
   }
 
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      fs.unlinkSync(DATA_FILE);
+    if (fs.existsSync(SOURCE_FILE)) {
+      fs.unlinkSync(SOURCE_FILE);
     }
-    employees = [];
-    saveEmployeesToDisk(employees);
-    return res.json({ success: true, message: 'Source file deleted and employee data cleared.' });
+    return res.json({ success: true, message: 'Source file deleted. Employee directory and photos are preserved.' });
   } catch (error) {
     console.error('Failed to delete source file:', error);
     return res.status(500).json({ error: 'Failed to delete source file' });

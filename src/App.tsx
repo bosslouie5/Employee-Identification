@@ -23,6 +23,7 @@ function App() {
   const [fetchError, setFetchError] = useState('');
   const [defaultPhotoUrl, setDefaultPhotoUrl] = useState<string | null>(null);
   const [defaultPhotoPreview, setDefaultPhotoPreview] = useState<string | null>(null);
+  const [photoFieldPreview, setPhotoFieldPreview] = useState<string | null>(null);
   const [defaultPhotoExists, setDefaultPhotoExists] = useState(false);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
@@ -193,11 +194,21 @@ function App() {
         setDefaultPhotoExists(true);
         setDefaultPhotoUrl(j.url || previewUrl);
         setDefaultPhotoPreview(null);
+        setUploadMessage('Default photo uploaded successfully.');
       } else {
-        setUploadMessage(j.error || 'Failed to upload default photo');
+        setDefaultPhotoPreview(null);
+        setDefaultPhotoUrl(defaultPhotoUrl);
+        setUploadMessage(
+          j.error ||
+            'Failed to upload default photo. Confirm the admin server is running and the access code is correct.'
+        );
       }
     } catch (err) {
-      setUploadMessage('Failed to upload default photo');
+      setDefaultPhotoPreview(null);
+      setDefaultPhotoUrl(defaultPhotoUrl);
+      setUploadMessage(
+        'Failed to upload default photo. Check that the backend server is running at http://localhost:4000.'
+      );
     }
   };
 
@@ -221,6 +232,12 @@ function App() {
     if (!activeData) return;
     const f = file;
     if (!f) return;
+
+    const previewUrl = URL.createObjectURL(f);
+    if (field === 'photo') {
+      setPhotoFieldPreview(previewUrl);
+    }
+
     try {
       const fd = new FormData();
       fd.append('file', f);
@@ -236,15 +253,24 @@ function App() {
           const updated = newList.find((e: Employee) => e.id === activeData.id);
           if (updated) setActive(updated);
         }
+        if (field === 'photo') {
+          setPhotoFieldPreview(null);
+        }
         if (j.updated === false) {
           setUploadMessage('Photo uploaded but employee record not found on server. Upload the Excel source via Admin first.');
         } else {
           setUploadMessage('Photo uploaded');
         }
       } else {
+        if (field === 'photo') {
+          setPhotoFieldPreview(null);
+        }
         setUploadMessage(j.error || 'Failed to upload photo');
       }
     } catch (err) {
+      if (field === 'photo') {
+        setPhotoFieldPreview(null);
+      }
       setUploadMessage('Failed to upload photo');
     }
   };
@@ -571,12 +597,18 @@ function App() {
               </div>
 
               <div className="upload-grid">
-                <div className="upload-card">
+                <div className="upload-card photo-field-card">
                   <label>Photo field</label>
-                  {isAdmin ? (
-                    <div className="upload-actions">
+                  <div className="photo-field-row">
+                    <div className="photo-field-preview">
+                      <img
+                        src={photoFieldPreview || activeData?.photoUrl || DEFAULT_AVATAR}
+                        alt="Photo preview"
+                      />
+                    </div>
+                    <div className="photo-field-actions">
                       <label className="file-input-label">
-                        <span>Upload photo</span>
+                        <span>Set photo</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -588,9 +620,7 @@ function App() {
                         Delete
                       </button>
                     </div>
-                  ) : (
-                    <div className="upload-placeholder">Drag or select file</div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="upload-card">

@@ -116,11 +116,18 @@ function App() {
     return buildQrUrl(activeData.id);
   };
 
+  const cacheEmployeePreview = async (employee: Employee) => {
+    const photoSource = employee.photoUrl?.trim() || defaultPhotoUrl || DEFAULT_AVATAR;
+    const cachedPhotoUrl = await convertToDataUrl(photoSource);
+    localStorage.setItem(`employee_${employee.id}`, JSON.stringify({ ...employee, photoUrl: cachedPhotoUrl }));
+  };
+
   const handleCopyQr = async () => {
     if (!activeData) return;
     try {
+      await cacheEmployeePreview(activeData);
       await navigator.clipboard.writeText(getActiveQrUrl());
-      setQrMessage('Profile QR link copied to clipboard.');
+      setQrMessage('Profile QR link copied to clipboard. Preview is cached locally too.');
     } catch (err) {
       setQrMessage('Could not copy the QR link. Scan the code directly instead.');
     }
@@ -171,7 +178,7 @@ function App() {
           const photoSource = activeData.photoUrl?.trim() || defaultPhotoUrl || DEFAULT_AVATAR;
           const cachedPhotoUrl = await convertToDataUrl(photoSource);
           const savedEmployee = { ...activeData, photoUrl: cachedPhotoUrl };
-          localStorage.setItem(`employee_${activeData.id}`, JSON.stringify(savedEmployee));
+          await cacheEmployeePreview(savedEmployee);
 
           const downloadUrl = URL.createObjectURL(blob);
           const link = document.createElement('a');

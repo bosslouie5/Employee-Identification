@@ -17,8 +17,6 @@ export default function Preview() {
     let intervalId: number | null = null;
 
     async function load() {
-      setLoading(true);
-      setError('');
       try {
         const params = new URLSearchParams(window.location.search);
         const id = params.get('id');
@@ -34,6 +32,7 @@ export default function Preview() {
           try {
             const emp = JSON.parse(stored);
             setEmployee(emp);
+            setError('');
             setLoading(false);
             return;
           } catch (e) {
@@ -41,19 +40,29 @@ export default function Preview() {
           }
         }
 
-        // Fall back to API
-        const res = await fetch('/api/employees');
-        if (!res.ok) throw new Error('Failed to fetch');
-        const j = await res.json();
-        const list: Employee[] = Array.isArray(j.employees) ? j.employees : [];
-        const found = list.find((e) => e.id === id || e.qrCodeData === id);
-        if (!found) {
-          setError('Employee not found');
-        } else {
-          setEmployee(found);
+        // Only show loading on initial load if no cached data
+        if (!employee) {
+          setLoading(true);
         }
-      } catch (err) {
-        setError('Unable to load employee data');
+
+        // Fall back to API
+        try {
+          const res = await fetch('/api/employees');
+          if (!res.ok) throw new Error('Failed to fetch');
+          const j = await res.json();
+          const list: Employee[] = Array.isArray(j.employees) ? j.employees : [];
+          const found = list.find((e) => e.id === id || e.qrCodeData === id);
+          if (found) {
+            setEmployee(found);
+            setError('');
+          } else if (!employee) {
+            setError('Employee not found. (Tip: The profile will be available if you save the QR code.)');
+          }
+        } catch (apiErr) {
+          if (!employee) {
+            setError('Unable to load employee data. Check your connection or save the QR code for offline access.');
+          }
+        }
       } finally {
         setLoading(false);
       }

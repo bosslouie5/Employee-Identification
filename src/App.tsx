@@ -127,7 +127,7 @@ function App() {
     try {
       await cacheEmployeePreview(activeData);
       await navigator.clipboard.writeText(getActiveQrUrl());
-      setQrMessage('Profile QR link copied to clipboard. Preview is cached locally too.');
+      setQrMessage('✓ QR link copied. Profile cached locally for offline access.');
     } catch (err) {
       setQrMessage('Could not copy the QR link. Scan the code directly instead.');
     }
@@ -188,7 +188,7 @@ function App() {
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(downloadUrl);
-          setQrMessage('QR code downloaded as PNG. Works offline once saved!');
+          setQrMessage('✓ QR code saved. Profile cached locally and works offline.');
         }, 'image/png');
       };
 
@@ -208,15 +208,22 @@ function App() {
     if (url.startsWith('data:')) return url;
     try {
       const response = await fetch(url);
-      if (!response.ok) return url;
+      if (!response.ok) {
+        console.warn(`Failed to fetch photo from ${url}, using URL as-is`);
+        return url;
+      }
       const blob = await response.blob();
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
+        reader.onerror = () => {
+          console.warn('FileReader failed, using URL as-is');
+          resolve(url);
+        };
         reader.readAsDataURL(blob);
       });
-    } catch {
+    } catch (err) {
+      console.warn(`Photo conversion error: ${err}, using URL as-is`);
       return url;
     }
   };

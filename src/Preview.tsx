@@ -88,9 +88,9 @@ export default function Preview() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        style={{ width: 520, borderRadius: 20, padding: 26, background: 'linear-gradient(180deg,#071022, #051224)', border: '1px solid rgba(148,163,184,0.06)', boxShadow: '0 28px 120px rgba(2,8,20,0.5)' }}
+        style={{ width: 'min(520px, 100%)', maxWidth: '100%', borderRadius: 20, padding: 26, background: 'linear-gradient(180deg,#071022, #051224)', border: '1px solid rgba(148,163,184,0.06)', boxShadow: '0 28px 120px rgba(2,8,20,0.5)' }}
       >
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ width: 110, height: 110, borderRadius: 16, overflow: 'hidden', background: '#0f172a', border: '1px solid rgba(148,163,184,0.06)' }}>
             <img src={employee.photoUrl || '/data/default.png'} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#0f172a' }} />
           </div>

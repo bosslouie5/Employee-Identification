@@ -9,72 +9,74 @@ function SmallLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function Preview() {
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [loading, setLoading] = useState(true);
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  const getStoredEmployee = (): Employee | null => {
+    if (!id) return null;
+    const stored = localStorage.getItem(`employee_${id}`);
+    if (!stored) return null;
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return null;
+    }
+  };
+
+  const initialEmployee = getStoredEmployee();
+  const [employee, setEmployee] = useState<Employee | null>(initialEmployee);
+  const [loading, setLoading] = useState(initialEmployee === null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let intervalId: number | null = null;
 
     async function load() {
+      if (!id) {
+        setError('No employee id provided');
+        setLoading(false);
+        return;
+      }
+
+      const stored = getStoredEmployee();
+      if (stored) {
+        setEmployee(stored);
+        setError('');
+        setLoading(false);
+        return;
+      }
+
       try {
-        const params = new URLSearchParams(window.location.search);
-        const id = params.get('id');
-        if (!id) {
-          setError('No employee id provided');
-          setLoading(false);
-          return;
+        const res = await fetch('/api/employees');
+        if (!res.ok) throw new Error('Failed to fetch');
+        const j = await res.json();
+        const list: Employee[] = Array.isArray(j.employees) ? j.employees : [];
+        const found = list.find((e) => e.id === id || e.qrCodeData === id);
+        if (found) {
+          setEmployee(found);
+          setError('');
+        } else {
+          setError('Employee not found. (Tip: The profile will be available if you save the QR code.)');
         }
-
-        // Try localStorage first for offline support
-        const stored = localStorage.getItem(`employee_${id}`);
-        if (stored) {
-          try {
-            const emp = JSON.parse(stored);
-            setEmployee(emp);
-            setError('');
-            setLoading(false);
-            return;
-          } catch (e) {
-            // ignore parse error
-          }
-        }
-
-        // Only show loading on initial load if no cached data
+      } catch (apiErr) {
         if (!employee) {
-          setLoading(true);
-        }
-
-        // Fall back to API
-        try {
-          const res = await fetch('/api/employees');
-          if (!res.ok) throw new Error('Failed to fetch');
-          const j = await res.json();
-          const list: Employee[] = Array.isArray(j.employees) ? j.employees : [];
-          const found = list.find((e) => e.id === id || e.qrCodeData === id);
-          if (found) {
-            setEmployee(found);
-            setError('');
-          } else if (!employee) {
-            setError('Employee not found. (Tip: The profile will be available if you save the QR code.)');
-          }
-        } catch (apiErr) {
-          if (!employee) {
-            setError('Unable to load employee data. Check your connection or save the QR code for offline access.');
-          }
+          setError('Unable to load employee data. Check your connection or save the QR code for offline access.');
         }
       } finally {
         setLoading(false);
       }
     }
 
+    if (initialEmployee === null) {
+      setLoading(true);
+    }
     load();
-    intervalId = setInterval(load, 4000);
+    intervalId = window.setInterval(load, 4000);
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      if (intervalId) window.clearInterval(intervalId);
     };
-  }, []);
+  }, [id]);
 
   if (loading) return <div style={{ padding: 32 }}>Loading preview…</div>;
   if (error) return <div style={{ padding: 32 }}>{error}</div>;

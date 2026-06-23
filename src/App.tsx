@@ -25,6 +25,9 @@ function App() {
   const [adminPin, setAdminPin] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginPin, setLoginPin] = useState('');
+  const [loginMessage, setLoginMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [defaultPhotoUrl, setDefaultPhotoUrl] = useState<string | null>(null);
@@ -41,6 +44,14 @@ function App() {
   const [qrMessage, setQrMessage] = useState('');
   const [lastUpdate, setLastUpdate] = useState<number>(0);
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedLogin = localStorage.getItem('app_access_granted');
+    if (storedLogin === 'true') {
+      setIsLoggedIn(true);
+    }
+  }, []);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
   const pageSubTitle = isAdminRoute
@@ -353,18 +364,20 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchEmployees();
     fetchDefault();
-  }, [fetchEmployees, fetchDefault]);
+  }, [fetchEmployees, fetchDefault, isLoggedIn]);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     const interval = setInterval(() => {
       fetchEmployees();
       fetchDefault();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchEmployees, fetchDefault]);
+  }, [fetchEmployees, fetchDefault, isLoggedIn]);
 
   useEffect(() => {
     if (!activeData) return;
@@ -600,6 +613,19 @@ function App() {
     }
   };
 
+  const handleLoginSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (loginPin.trim() === ADMIN_CODE) {
+      setIsLoggedIn(true);
+      localStorage.setItem('app_access_granted', 'true');
+      setLoginMessage('Access granted. Welcome!');
+      setLoginPin('');
+      return;
+    }
+
+    setLoginMessage('Invalid access code. Please try again.');
+  };
+
   const handleAdminSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (adminPin.trim() === ADMIN_CODE) {
@@ -613,6 +639,36 @@ function App() {
   };
 
   const clearMessage = () => setUploadMessage('');
+
+  if (!isLoggedIn) {
+    return (
+      <div className="page-shell login-shell">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="login-card"
+        >
+          <p className="eyebrow">Secure access required</p>
+          <h1>Log in to continue</h1>
+          <p className="subtitle">Enter the access code to open the employee directory.</p>
+          <form className="login-form" onSubmit={handleLoginSubmit}>
+            <input
+              className="login-input"
+              type="password"
+              value={loginPin}
+              onChange={(e) => setLoginPin(e.target.value)}
+              placeholder="Enter access code"
+              autoFocus
+            />
+            <button className="login-button" type="submit">
+              Unlock site
+            </button>
+            {loginMessage && <p className="login-message">{loginMessage}</p>}
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-shell">

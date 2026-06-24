@@ -48,6 +48,22 @@ async function createImage(url: string) {
   });
 }
 
+async function createCompressedPhotoDataUrl(source: string) {
+  const dataUrl = await fetchDataUrl(source);
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return '';
+
+  const img = await createImage(dataUrl);
+  const maxDimension = 100;
+  const ratio = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.width * ratio));
+  canvas.height = Math.max(1, Math.round(img.height * ratio));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.35);
+}
+
 async function inlineImageSources(root: HTMLElement) {
   const originalSrcs: Array<{ img: HTMLImageElement; src: string }> = [];
   const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
@@ -137,6 +153,88 @@ export default function Preview() {
   const openQrViewer = () => setViewerOpen('qr');
   const closeViewer = () => setViewerOpen(null);
   const previewCardRef = useRef<HTMLDivElement | null>(null);
+
+  const usingDefaultPhoto = !employee?.photoUrl || employee.photoUrl === '/data/default.png';
+  const qrPhotoUrl = employee?.photoUrl || '/data/default.png';
+  const qrDefaultPhotoUrl = '/data/default.png';
+
+  const getVCardPhotoLine = (photoUrl: string) => {
+    if (!photoUrl) return '';
+    const source = photoUrl.startsWith('http') || photoUrl.startsWith('data:')
+      ? photoUrl
+      : `${window.location.origin}${photoUrl}`;
+
+    if (source.startsWith('data:')) {
+      const match = source.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (!match) return '';
+      const [, mimeType, base64Data] = match;
+      const type = mimeType.split('/')[1].toUpperCase();
+      return `PHOTO;ENCODING=b;TYPE=${type}:${base64Data}`;
+    }
+
+    const extensionMatch = source.match(/\.([^.?#\/]+)(?:[?#]|$)/);
+    const ext = extensionMatch ? extensionMatch[1].toLowerCase() : '';
+    const type = ext === 'png' ? 'PNG' : ext === 'gif' ? 'GIF' : ext === 'webp' ? 'WEBP' : 'JPEG';
+    return `PHOTO;VALUE=URI;TYPE=${type}:${source}`;
+  };
+
+  const [qrPhotoLine, setQrPhotoLine] = useState<string>('');
+  const [qrPhotoReady, setQrPhotoReady] = useState(false);
+
+  const createCompressedPhotoDataUrl = async (source: string) => {
+    const dataUrl = await fetchDataUrl(source);
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) return '';
+    const img = await createImage(dataUrl);
+    const maxDimension = 120;
+    const ratio = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * ratio));
+    canvas.height = Math.max(1, Math.round(img.height * ratio));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.45);
+  };
+
+  useEffect(() => {
+    let canceled = false;
+
+    async function resolvePhotoLine() {
+      if (!employee || !employee.photoUrl || employee.photoUrl === '/data/default.png') {
+        if (!canceled) {
+          setQrPhotoLine('');
+          setQrPhotoReady(true);
+        }
+        return;
+      }
+
+      const source = employee.photoUrl.startsWith('http') || employee.photoUrl.startsWith('data:')
+        ? employee.photoUrl
+        : `${window.location.origin}${employee.photoUrl}`;
+
+      let photoLine = '';
+      if (source.startsWith('data:')) {
+        photoLine = getVCardPhotoLine(source);
+      } else {
+        const compressed = await createCompressedPhotoDataUrl(source);
+        if (compressed && compressed.length < 4000) {
+          photoLine = getVCardPhotoLine(compressed);
+        } else {
+          photoLine = getVCardPhotoLine(source);
+        }
+      }
+
+      if (!canceled) {
+        setQrPhotoLine(photoLine);
+        setQrPhotoReady(true);
+      }
+    }
+
+    resolvePhotoLine();
+    return () => {
+      canceled = true;
+    };
+  }, [employee]);
 
   useEffect(() => {
     employeeRef.current = employee;
@@ -240,29 +338,13 @@ export default function Preview() {
   if (error) return <div className="preview-shell preview-state">{error}</div>;
   if (!employee) return null;
 
-  const usingDefaultPhoto = !employee.photoUrl || employee.photoUrl === '/data/default.png';
-  const qrDefaultPhotoUrl = '/data/default.png';
-
-  const getVCardPhotoLine = (photoUrl: string) => {
-    if (!photoUrl) return '';
-    const source = photoUrl.startsWith('http') || photoUrl.startsWith('data:')
-      ? photoUrl
-      : `${window.location.origin}${photoUrl}`;
-
-    if (source.startsWith('data:')) {
-      const match = source.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (!match) return '';
-      const [, mimeType, base64Data] = match;
-      const type = mimeType.split('/')[1].toUpperCase();
-      return `PHOTO;ENCODING=b;TYPE=${type}:${base64Data}`;
-    }
-
-    return `PHOTO;VALUE=URI:${source}`;
-  };
+  const photoSource = employee.photoUrl && employee.photoUrl !== '/data/default.png'
+    ? getResourceUrl(employee.photoUrl)
+    : '';
+  const photoLine = photoSource ? getVCardPhotoLine(photoSource) : '';
 
   const contactValue = (() => {
-    // Build a vCard payload so scanning the QR will save the contact with
-    // First name, 2nd name, 3rd name, Last name, Title, Company, Mobile, Email, Homepage, and Photo
+    // Build a vCard payload for downloading the contact file.
     if (!employee) return '';
     const full = (employee.fullName || '').trim();
     const parts = full ? full.split(/\s+/) : [];
@@ -288,7 +370,6 @@ export default function Preview() {
 
     const additional = [second, third].filter(Boolean).join(' ').trim();
     const esc = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/[,;\\]/g, '\\$&');
-    const photoLine = getVCardPhotoLine(qrDefaultPhotoUrl);
 
     const vcardLines = [
       'BEGIN:VCARD',
@@ -302,6 +383,61 @@ export default function Preview() {
 
     if (photoLine) {
       vcardLines.push(photoLine);
+    }
+    if (employee.phoneNumber) {
+      vcardLines.push(`TEL;TYPE=CELL:${esc(employee.phoneNumber)}`);
+    }
+    if (employee.emailAddress) {
+      vcardLines.push(`EMAIL:${esc(employee.emailAddress)}`);
+    }
+    if (employee.homePage) {
+      vcardLines.push(`URL:${esc(employee.homePage)}`);
+    }
+
+    vcardLines.push('END:VCARD');
+
+    return vcardLines.join('\r\n');
+  })();
+
+  const qrValue = (() => {
+    if (!employee) return '';
+    const full = (employee.fullName || '').trim();
+    const parts = full ? full.split(/\s+/) : [];
+    let first = '';
+    let second = '';
+    let third = '';
+    let last = '';
+    if (parts.length === 1) {
+      first = parts[0];
+    } else if (parts.length === 2) {
+      first = parts[0];
+      last = parts[1];
+    } else if (parts.length === 3) {
+      first = parts[0];
+      second = parts[1];
+      last = parts[2];
+    } else if (parts.length >= 4) {
+      first = parts[0];
+      second = parts[1];
+      third = parts[2];
+      last = parts.slice(3).join(' ');
+    }
+
+    const additional = [second, third].filter(Boolean).join(' ').trim();
+    const esc = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/[,;\\]/g, '\\$&');
+    const qrPhotoSource = photoSource;
+
+    const vcardLines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `N:${esc(last)};${esc(first)};${esc(additional)};;`,
+      `FN:${esc(employee.fullName || '')}`,
+      `ORG:${esc('MASDAR BUILDING MATERIALS')}`,
+      `TITLE:${esc(employee.positionTitle || '')}`,
+    ];
+
+    if (qrPhotoSource) {
+      vcardLines.push(qrPhotoSource);
     }
     if (employee.phoneNumber) {
       vcardLines.push(`TEL;TYPE=CELL:${esc(employee.phoneNumber)}`);
@@ -542,7 +678,7 @@ export default function Preview() {
                 aria-label="View QR code"
               >
                 <div className="preview-qr-box">
-                  <QRCode value={contactValue} size={136} level="H" bgColor="#ffffff" fgColor="#0f172a" />
+                  <QRCode value={qrValue} size={136} level="H" bgColor="#ffffff" fgColor="#0f172a" />
                   <div className="qr-overlay">
                     <img src={qrDefaultPhotoUrl} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
                   </div>
@@ -593,7 +729,7 @@ export default function Preview() {
             ) : (
               <div className="preview-modal-qr">
                 <div className="preview-qr-box modal-qr-box">
-                  <QRCode value={contactValue} size={320} level="H" bgColor="#ffffff" fgColor="#0f172a" />
+                  <QRCode value={qrValue} size={320} level="H" bgColor="#ffffff" fgColor="#0f172a" />
                   <div className="qr-overlay">
                     <img src={qrDefaultPhotoUrl} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
                   </div>

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Cropper, { Area } from 'react-easy-crop';
 import QRCode from 'react-qr-code';
+import html2canvas from 'html2canvas';
 import { Employee, employees as defaultEmployees, searchEmployees } from './employeeSource';
 import { parseExcelFile } from './excelParser';
 
@@ -113,6 +114,7 @@ function App() {
     : cacheBustUrl(defaultPhotoUrl) || DEFAULT_AVATAR;
   const employeeCount = employees.length;
   const resultsCount = filtered.length;
+  const qrCenterPhoto = cacheBustUrl(defaultPhotoUrl) || DEFAULT_AVATAR;
 
   const buildQrUrl = (employeeId: string) => {
     if (typeof window === 'undefined') return '';
@@ -160,56 +162,32 @@ function App() {
     }
 
     try {
-      const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(svg);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        setQrMessage('Failed to save QR code. Browser canvas not supported.');
+      const canvas = await html2canvas(qrWrapperRef.current, {
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        scale: 2,
+      });
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png', 1));
+      if (!blob) {
+        setQrMessage('Failed to save QR code.');
         return;
       }
 
-      const img = new Image();
-      const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
-      const svgUrl = URL.createObjectURL(svgBlob);
+      const photoSource = activeData.photoUrl?.trim() || defaultPhotoUrl || DEFAULT_AVATAR;
+      const cachedPhotoUrl = await convertToDataUrl(photoSource);
+      const savedEmployee = { ...activeData, photoUrl: cachedPhotoUrl };
+      await cacheEmployeePreview(savedEmployee);
 
-      img.onload = async () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(svgUrl);
-
-        canvas.toBlob(async (blob) => {
-          if (!blob) {
-            setQrMessage('Failed to save QR code.');
-            return;
-          }
-
-          const photoSource = activeData.photoUrl?.trim() || defaultPhotoUrl || DEFAULT_AVATAR;
-          const cachedPhotoUrl = await convertToDataUrl(photoSource);
-          const savedEmployee = { ...activeData, photoUrl: cachedPhotoUrl };
-          await cacheEmployeePreview(savedEmployee);
-
-          const downloadUrl = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `${activeData.id}-employee-qr.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(downloadUrl);
-          setQrMessage('✓ QR code saved. Profile cached locally and works offline.');
-        }, 'image/png');
-      };
-
-      img.onerror = () => {
-        URL.revokeObjectURL(svgUrl);
-        setQrMessage('Failed to convert QR code to image.');
-      };
-
-      img.src = svgUrl;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${activeData.id}-employee-qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+      setQrMessage('✓ QR code saved. Profile cached locally and works offline.');
     } catch (err) {
       setQrMessage('Error saving QR code. Try again.');
     }
@@ -1040,7 +1018,10 @@ function App() {
                 </div>
 
                 <div className="qr-box" ref={qrWrapperRef}>
-                  <QRCode value={getActiveQrUrl()} size={192} bgColor="#f8fafc" fgColor="#0f172a" />
+                  <QRCode value={getActiveQrUrl()} size={192} level="H" bgColor="#f8fafc" fgColor="#0f172a" />
+                  <div className="qr-overlay">
+                    <img src={qrCenterPhoto} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
+                  </div>
                 </div>
                 <p className="qr-detail">
                   Scan this QR to open the employee profile directly.

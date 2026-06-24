@@ -386,7 +386,12 @@ export default function Preview() {
           <motion.div whileHover={{ scale: 1.03 }} className="preview-qr-panel">
             <div className="preview-qr-box">
               {qrGenerated ? (
-                <QRCode value={contactValue} size={136} bgColor="#ffffff" fgColor="#0f172a" />
+                <>
+                  <QRCode value={contactValue} size={136} level="H" bgColor="#ffffff" fgColor="#0f172a" />
+                  <div className="qr-overlay">
+                    <img src={employee.photoUrl || '/data/default.png'} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
+                  </div>
+                </>
               ) : (
                 <div className="preview-skeleton">
                   QR code not generated yet

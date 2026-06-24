@@ -220,10 +220,28 @@ export default function Preview() {
   if (!employee) return null;
 
   const usingDefaultPhoto = !employee.photoUrl || employee.photoUrl === '/data/default.png';
+  const qrDefaultPhotoUrl = '/data/default.png';
+
+  const getVCardPhotoLine = (photoUrl: string) => {
+    if (!photoUrl) return '';
+    const source = photoUrl.startsWith('http') || photoUrl.startsWith('data:')
+      ? photoUrl
+      : `${window.location.origin}${photoUrl}`;
+
+    if (source.startsWith('data:')) {
+      const match = source.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (!match) return '';
+      const [, mimeType, base64Data] = match;
+      const type = mimeType.split('/')[1].toUpperCase();
+      return `PHOTO;ENCODING=b;TYPE=${type}:${base64Data}`;
+    }
+
+    return `PHOTO;VALUE=URI:${source}`;
+  };
 
   const contactValue = (() => {
     // Build a vCard payload so scanning the QR will save the contact with
-    // First name, 2nd name, 3rd name, Last name, Title, Company, Mobile, Email, Homepage
+    // First name, 2nd name, 3rd name, Last name, Title, Company, Mobile, Email, Homepage, and Photo
     if (!employee) return '';
     const full = (employee.fullName || '').trim();
     const parts = full ? full.split(/\s+/) : [];
@@ -248,8 +266,8 @@ export default function Preview() {
     }
 
     const additional = [second, third].filter(Boolean).join(' ').trim();
-
     const esc = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/[,;\\]/g, '\\$&');
+    const photoLine = getVCardPhotoLine(qrDefaultPhotoUrl);
 
     const vcardLines = [
       'BEGIN:VCARD',
@@ -261,6 +279,9 @@ export default function Preview() {
       `TITLE:${esc(employee.positionTitle || '')}`,
     ];
 
+    if (photoLine) {
+      vcardLines.push(photoLine);
+    }
     if (employee.phoneNumber) {
       vcardLines.push(`TEL;TYPE=CELL:${esc(employee.phoneNumber)}`);
     }
@@ -389,7 +410,7 @@ export default function Preview() {
                 <>
                   <QRCode value={contactValue} size={136} level="H" bgColor="#ffffff" fgColor="#0f172a" />
                   <div className="qr-overlay">
-                    <img src={employee.photoUrl || '/data/default.png'} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
+                    <img src={qrDefaultPhotoUrl} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
                   </div>
                 </>
               ) : (

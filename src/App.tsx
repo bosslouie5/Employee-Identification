@@ -44,6 +44,7 @@ function App() {
   const [selectedImageField, setSelectedImageField] = useState<string | null>(null);
   const [qrMessage, setQrMessage] = useState('');
   const [lastUpdate, setLastUpdate] = useState<number>(0);
+  const [qrCenterPhotoUrl, setQrCenterPhotoUrl] = useState<string>(DEFAULT_AVATAR);
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -114,7 +115,6 @@ function App() {
     : cacheBustUrl(defaultPhotoUrl) || DEFAULT_AVATAR;
   const employeeCount = employees.length;
   const resultsCount = filtered.length;
-  const qrCenterPhoto = cacheBustUrl(defaultPhotoUrl) || DEFAULT_AVATAR;
 
   const buildQrUrl = (employeeId: string) => {
     if (typeof window === 'undefined') return '';
@@ -152,6 +152,56 @@ function App() {
     window.open(getActiveQrUrl(), '_blank');
   };
 
+  async function waitForImages(root: HTMLElement) {
+    const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+    await Promise.all(
+      images.map((img) => {
+        img.crossOrigin = 'anonymous';
+        if (img.complete && img.naturalWidth !== 0) {
+          return Promise.resolve();
+        }
+        return new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true });
+          img.addEventListener('error', () => resolve(), { once: true });
+        });
+      })
+    );
+  }
+
+  async function fetchDataUrl(url: string) {
+    if (!url || url.startsWith('data:')) return url;
+    try {
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) return url;
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to convert image to data URL'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      return url;
+    }
+  }
+
+  async function inlineImageSources(root: HTMLElement) {
+    const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+    const originalSrcs: Array<{ img: HTMLImageElement; src: string }> = [];
+    await Promise.all(
+      images.map(async (img) => {
+        const src = img.src;
+        if (!src || src.startsWith('data:')) return;
+        const dataUrl = await fetchDataUrl(src);
+        if (dataUrl && dataUrl.startsWith('data:')) {
+          originalSrcs.push({ img, src });
+          img.src = dataUrl;
+        }
+      })
+    );
+    return originalSrcs;
+  }
+
   const handleSaveQr = async () => {
     if (!activeData || !qrWrapperRef.current) return;
 
@@ -162,11 +212,70 @@ function App() {
     }
 
     try {
-      const canvas = await html2canvas(qrWrapperRef.current, {
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        scale: 2,
-      });
+      const svgElement = qrWrapperRef.current.querySelector('svg');
+      const overlayElement = qrWrapperRef.current.querySelector<HTMLDivElement>('.qr-overlay');
+      const overlayImage = overlayElement?.querySelector<HTMLImageElement>('img');
+      if (!svgElement || !overlayElement || !overlayImage) {
+        setQrMessage('Unable to save QR code. Try again after selecting an employee.');
+        return;
+      }
+
+      const wrapperRect = qrWrapperRef.current.getBoundingClientRect();
+      const overlayRect = overlayElement.getBoundingClientRect();
+      const wrapperLeft = wrapperRect.left;
+      const wrapperTop = wrapperRect.top;
+
+      const svgData = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const svgImage = await createImage(svgUrl);
+      URL.revokeObjectURL(svgUrl);
+
+      const overlaySrc = await fetchDataUrl(overlayImage.src);
+      const overlayImg = await createImage(overlaySrc);
+
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(wrapperRect.width * scale);
+      canvas.height = Math.round(wrapperRect.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setQrMessage('Failed to save QR code.');
+        return;
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(svgImage, 0, 0, canvas.width, canvas.height);
+
+      const overlayX = Math.round((overlayRect.left - wrapperLeft) * scale);
+      const overlayY = Math.round((overlayRect.top - wrapperTop) * scale);
+      const overlayW = Math.round(overlayRect.width * scale);
+      const overlayH = Math.round(overlayRect.height * scale);
+
+      ctx.fillStyle = '#ffffff';
+      const radius = Math.round(12 * scale);
+      if (ctx.roundRect) {
+        ctx.roundRect(overlayX, overlayY, overlayW, overlayH, radius);
+      } else {
+        const r = radius;
+        ctx.beginPath();
+        ctx.moveTo(overlayX + r, overlayY);
+        ctx.lineTo(overlayX + overlayW - r, overlayY);
+        ctx.quadraticCurveTo(overlayX + overlayW, overlayY, overlayX + overlayW, overlayY + r);
+        ctx.lineTo(overlayX + overlayW, overlayY + overlayH - r);
+        ctx.quadraticCurveTo(overlayX + overlayW, overlayY + overlayH, overlayX + overlayW - r, overlayY + overlayH);
+        ctx.lineTo(overlayX + r, overlayY + overlayH);
+        ctx.quadraticCurveTo(overlayX, overlayY + overlayH, overlayX, overlayY + overlayH - r);
+        ctx.lineTo(overlayX, overlayY + r);
+        ctx.quadraticCurveTo(overlayX, overlayY, overlayX + r, overlayY);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.lineWidth = Math.round(2 * scale);
+      ctx.stroke();
+      ctx.drawImage(overlayImg, overlayX, overlayY, overlayW, overlayH);
 
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png', 1));
       if (!blob) {
@@ -217,6 +326,22 @@ function App() {
       return url;
     }
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    const updateQrCenterPhoto = async () => {
+      const source = defaultPhotoUrl || DEFAULT_AVATAR;
+      const dataUrl = await convertToDataUrl(source);
+      if (isMounted) {
+        setQrCenterPhotoUrl(dataUrl || DEFAULT_AVATAR);
+      }
+    };
+
+    updateQrCenterPhoto();
+    return () => {
+      isMounted = false;
+    };
+  }, [defaultPhotoUrl]);
 
   const onCropComplete = useCallback((_: Area, croppedArea: Area) => {
     setCroppedAreaPixels(croppedArea);
@@ -1020,7 +1145,7 @@ function App() {
                 <div className="qr-box" ref={qrWrapperRef}>
                   <QRCode value={getActiveQrUrl()} size={192} level="H" bgColor="#f8fafc" fgColor="#0f172a" />
                   <div className="qr-overlay">
-                    <img src={qrCenterPhoto} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
+                    <img src={qrCenterPhotoUrl} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
                   </div>
                 </div>
                 <p className="qr-detail">

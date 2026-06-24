@@ -312,6 +312,19 @@ export default function Preview() {
     setQrGenerated(true);
   };
 
+  const handleDownloadVCard = () => {
+    if (!employee) return;
+    const vcfData = contactValue;
+    const blob = new Blob([vcfData], { type: 'text/vcard;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${employee.id || 'contact'}.vcf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
   const handleExportImage = async () => {
     if (!previewCardRef.current || !employee) return;
     if (!qrGenerated) {
@@ -514,6 +527,9 @@ export default function Preview() {
 
         <div className="preview-button-row">
           <a href="/" className="preview-link">Open app</a>
+          <button className="preview-print-button" onClick={handleDownloadVCard} disabled={!qrGenerated || savingImage}>
+            Add Contact
+          </button>
           {!qrGenerated ? (
             <button className="preview-print-button" onClick={handleGenerateQr} disabled={savingImage}>
               Generate QR

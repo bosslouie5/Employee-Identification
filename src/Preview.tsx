@@ -111,11 +111,21 @@ export default function Preview() {
   const [employee, setEmployee] = useState<Employee | null>(initialEmployee);
   const [loading, setLoading] = useState(initialEmployee === null);
   const [error, setError] = useState('');
+  const [savingImage, setSavingImage] = useState(false);
+  const [qrGenerated, setQrGenerated] = useState(false);
+  const [exportError, setExportError] = useState('');
   const employeeRef = useRef<Employee | null>(initialEmployee);
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     employeeRef.current = employee;
   }, [employee]);
+
+  useEffect(() => {
+    if (employee && !qrGenerated) {
+      setQrGenerated(true);
+    }
+  }, [employee, qrGenerated]);
 
   const isEmployeeEqual = (a: Employee, b: Employee) => {
     return (
@@ -212,54 +222,60 @@ export default function Preview() {
   const usingDefaultPhoto = !employee.photoUrl || employee.photoUrl === '/data/default.png';
 
   const contactValue = (() => {
-    try {
-      const parts = employee.fullName.trim().split(/\s+/);
-      const first = parts[0] || '';
-      let middle = '';
-      let last = '';
-      if (parts.length === 1) {
-        last = '';
-      } else if (parts.length === 2) {
-        last = parts[1];
-      } else {
-        last = parts[parts.length - 1];
-        middle = parts.slice(1, parts.length - 1).join(' ');
-      }
-      const title = employee.positionTitle || '';
-      const tel = employee.phoneNumber || '';
-      const email = employee.emailAddress || '';
-      // Use fixed company display per requirements
-      const org = 'Masdar Building Materials';
-      const url = employee.homePage || '';
-      // Prepare photo: only include external photo URLs in vCard, not data URIs
-      let photoLine = '';
-      const photo = employee.photoUrl || '';
-      if (photo && !photo.startsWith('data:')) {
-        const absolute = photo.startsWith('/') ? `${window.location.origin}${photo}` : photo;
-        photoLine = `PHOTO;VALUE=URI:${absolute}`;
-      }
-      const nField = `${last};${first};${middle}`;
-      return [
-        'BEGIN:VCARD',
-        'VERSION:3.0',
-        `N:${nField}`,
-        `FN:${employee.fullName}`,
-        `TITLE:${title}`,
-        `TEL;TYPE=CELL:${tel}`,
-        `EMAIL:${email}`,
-        `ORG:${org}`,
-        ...(photoLine ? [photoLine] : []),
-        `URL:${url}`,
-        'END:VCARD',
-      ].join('\n');
-    } catch (e) {
-      return window.location.href;
-    }
+    if (typeof window === 'undefined') return employee.qrCodeData || employee.id;
+    const url = new URL(window.location.href);
+    url.searchParams.set('id', employee.qrCodeData || employee.id);
+    return url.toString();
   })();
+
+  const handleGenerateQr = () => {
+    setExportError('');
+    setQrGenerated(true);
+  };
+
+  const handleExportImage = async () => {
+    if (!previewCardRef.current || !employee) return;
+    if (!qrGenerated) {
+      setExportError('Generate QR code first before saving the image.');
+      return;
+    }
+    setExportError('');
+    setSavingImage(true);
+
+    try {
+      await waitForImages(previewCardRef.current);
+      const originalSrcs = await inlineImageSources(previewCardRef.current);
+      const canvas = await html2canvas(previewCardRef.current, {
+        backgroundColor: '#0f172a',
+        useCORS: true,
+        scale: 2,
+      });
+      restoreImageSources(originalSrcs);
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) {
+        throw new Error('Unable to create image blob');
+      }
+
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${employee.id}-employee-preview.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      console.error('Image export failed', err);
+      setExportError('Failed to export image. Try again.');
+    } finally {
+      setSavingImage(false);
+    }
+  };
 
   return (
     <div className="preview-shell">
       <motion.div
+        ref={previewCardRef}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
@@ -312,18 +328,34 @@ export default function Preview() {
 
           <motion.div whileHover={{ scale: 1.03 }} className="preview-qr-panel">
             <div className="preview-qr-box">
-              <QRCode value={contactValue} size={136} bgColor="#ffffff" fgColor="#0f172a" />
+              {qrGenerated ? (
+                <QRCode value={contactValue} size={136} bgColor="#ffffff" fgColor="#0f172a" />
+              ) : (
+                <div className="preview-skeleton">
+                  QR code not generated yet
+                </div>
+              )}
             </div>
-            <p className="preview-note">Scan to add this contact</p>
+            <p className="preview-note">{qrGenerated ? 'Scan to add this contact' : 'Generate the QR code first'}</p>
           </motion.div>
         </div>
 
         <div className="preview-button-row">
           <a href="/" className="preview-link">Open app</a>
-          <button className="preview-print-button" onClick={() => window.print()}>
-            Print
+          {!qrGenerated ? (
+            <button className="preview-print-button" onClick={handleGenerateQr} disabled={savingImage}>
+              Generate QR
+            </button>
+          ) : null}
+          <button
+            className="preview-print-button"
+            onClick={handleExportImage}
+            disabled={savingImage || !qrGenerated}
+          >
+            {savingImage ? 'Exporting…' : 'Save image'}
           </button>
         </div>
+        {exportError && <p className="preview-error-message">{exportError}</p>}
       </motion.div>
     </div>
   );

@@ -197,13 +197,32 @@ button {
 
 .preview-qr-panel {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-qr-box {
   background: #fff;
-  padding: 10px;
-  border-radius: 10px;
+  padding: 12px;
+  border-radius: 16px;
   display: inline-flex;
+  min-width: 156px;
+  min-height: 156px;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-skeleton {
+  min-width: 136px;
+  min-height: 136px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  text-align: center;
+  font-size: 0.9rem;
 }
 
 .preview-note {
@@ -254,6 +273,29 @@ button {
   color: #022018;
   border: none;
   cursor: pointer;
+}
+
+.preview-skeleton {
+  min-width: 136px;
+  min-height: 136px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 12px;
+}
+
+.preview-print-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.preview-error-message {
+  margin-top: 12px;
+  color: #fecaca;
+  font-size: 0.9rem;
 }
 
 .page-shell::before {

@@ -222,10 +222,58 @@ export default function Preview() {
   const usingDefaultPhoto = !employee.photoUrl || employee.photoUrl === '/data/default.png';
 
   const contactValue = (() => {
-    if (typeof window === 'undefined') return employee.qrCodeData || employee.id;
-    const url = new URL(window.location.href);
-    url.searchParams.set('id', employee.qrCodeData || employee.id);
-    return url.toString();
+    // Build a vCard payload so scanning the QR will save the contact with
+    // First name, 2nd name, 3rd name, Last name, Title, Company, Mobile, Email, Homepage
+    if (!employee) return employee?.qrCodeData || employee?.id || '';
+    const full = (employee.fullName || '').trim();
+    const parts = full ? full.split(/\s+/) : [];
+    let first = '';
+    let second = '';
+    let third = '';
+    let last = '';
+    if (parts.length === 1) {
+      first = parts[0];
+    } else if (parts.length === 2) {
+      first = parts[0];
+      last = parts[1];
+    } else if (parts.length === 3) {
+      first = parts[0];
+      second = parts[1];
+      last = parts[2];
+    } else if (parts.length >= 4) {
+      first = parts[0];
+      second = parts[1];
+      third = parts[2];
+      last = parts.slice(3).join(' ');
+    }
+
+    const additional = [second, third].filter(Boolean).join(' ').trim();
+
+    const esc = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/[,;\\]/g, '\\$&');
+
+    const vcardLines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      // N:Family;Given;Additional;Prefix;Suffix
+      `N:${esc(last)};${esc(first)};${esc(additional)};;`,
+      `FN:${esc(employee.fullName || '')}`,
+      `ORG:${esc(employee.companyName || '')}`,
+      `TITLE:${esc(employee.positionTitle || '')}`,
+    ];
+
+    if (employee.phoneNumber) {
+      vcardLines.push(`TEL;TYPE=CELL:${esc(employee.phoneNumber)}`);
+    }
+    if (employee.emailAddress) {
+      vcardLines.push(`EMAIL:${esc(employee.emailAddress)}`);
+    }
+    if (employee.homePage) {
+      vcardLines.push(`URL:${esc(employee.homePage)}`);
+    }
+
+    vcardLines.push('END:VCARD');
+
+    return vcardLines.join('\r\n');
   })();
 
   const handleGenerateQr = () => {
@@ -243,6 +291,11 @@ export default function Preview() {
     setSavingImage(true);
 
     try {
+      // Hide interactive UI (buttons, links) so they are not included in exported image
+      const buttonRow = previewCardRef.current.querySelector<HTMLDivElement>('.preview-button-row');
+      const prevDisplay = buttonRow ? buttonRow.style.display : null;
+      if (buttonRow) buttonRow.style.display = 'none';
+
       await waitForImages(previewCardRef.current);
       const originalSrcs = await inlineImageSources(previewCardRef.current);
       const canvas = await html2canvas(previewCardRef.current, {
@@ -250,6 +303,10 @@ export default function Preview() {
         useCORS: true,
         scale: 2,
       });
+
+      // restore interactive UI after canvas capture
+      if (buttonRow) buttonRow.style.display = prevDisplay || '';
+
       restoreImageSources(originalSrcs);
 
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));

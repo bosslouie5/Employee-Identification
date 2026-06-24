@@ -224,7 +224,7 @@ export default function Preview() {
   const contactValue = (() => {
     // Build a vCard payload so scanning the QR will save the contact with
     // First name, 2nd name, 3rd name, Last name, Title, Company, Mobile, Email, Homepage
-    if (!employee) return employee?.qrCodeData || employee?.id || '';
+    if (!employee) return '';
     const full = (employee.fullName || '').trim();
     const parts = full ? full.split(/\s+/) : [];
     let first = '';
@@ -257,7 +257,7 @@ export default function Preview() {
       // N:Family;Given;Additional;Prefix;Suffix
       `N:${esc(last)};${esc(first)};${esc(additional)};;`,
       `FN:${esc(employee.fullName || '')}`,
-      `ORG:${esc(employee.companyName || '')}`,
+      `ORG:${esc('MASDAR BUILDING MATERIALS')}`,
       `TITLE:${esc(employee.positionTitle || '')}`,
     ];
 

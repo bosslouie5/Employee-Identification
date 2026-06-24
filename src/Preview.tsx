@@ -342,6 +342,7 @@ export default function Preview() {
     ? getResourceUrl(employee.photoUrl)
     : '';
   const photoLine = photoSource ? getVCardPhotoLine(photoSource) : '';
+  const qrPhotoLineSafe = qrPhotoLine && qrPhotoLine.length < 3000 ? qrPhotoLine : '';
 
   const contactValue = (() => {
     // Build a vCard payload for downloading the contact file.
@@ -381,8 +382,9 @@ export default function Preview() {
       `TITLE:${esc(employee.positionTitle || '')}`,
     ];
 
-    if (photoLine) {
-      vcardLines.push(photoLine);
+    const finalPhotoLine = qrPhotoLine || photoLine;
+    if (finalPhotoLine) {
+      vcardLines.push(finalPhotoLine);
     }
     if (employee.phoneNumber) {
       vcardLines.push(`TEL;TYPE=CELL:${esc(employee.phoneNumber)}`);
@@ -425,7 +427,7 @@ export default function Preview() {
 
     const additional = [second, third].filter(Boolean).join(' ').trim();
     const esc = (s: string) => (s || '').replace(/\r?\n/g, ' ').replace(/[,;\\]/g, '\\$&');
-    const qrPhotoSource = photoSource;
+    const qrPhotoLine = qrPhotoLineSafe;
 
     const vcardLines = [
       'BEGIN:VCARD',
@@ -436,8 +438,8 @@ export default function Preview() {
       `TITLE:${esc(employee.positionTitle || '')}`,
     ];
 
-    if (qrPhotoSource) {
-      vcardLines.push(qrPhotoSource);
+    if (qrPhotoLine) {
+      vcardLines.push(qrPhotoLine);
     }
     if (employee.phoneNumber) {
       vcardLines.push(`TEL;TYPE=CELL:${esc(employee.phoneNumber)}`);

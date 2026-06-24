@@ -203,6 +203,23 @@ button {
   justify-content: center;
 }
 
+.preview-qr-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  border-radius: 20px;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.preview-qr-button:hover,
+.preview-qr-button:focus-visible {
+  outline: none;
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(56, 189, 248, 0.18);
+}
+
 .preview-qr-box {
   background: #fff;
   padding: 12px;
@@ -223,6 +240,116 @@ button {
   color: #475569;
   text-align: center;
   font-size: 0.9rem;
+}
+
+.preview-note {
+  margin: 10px 0 0;
+  color: #94a3b8;
+}
+
+.preview-field-link {
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+
+.preview-field-link:hover,
+.preview-field-link:focus-visible {
+  color: #38bdf8;
+}
+
+.preview-avatar-link {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 16px;
+}
+
+.preview-avatar-link:hover .preview-avatar,
+.preview-avatar-link:focus-visible .preview-avatar {
+  transform: scale(1.02);
+}
+
+.preview-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0f172a;
+  transition: transform 0.22s ease;
+}
+
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 20, 0.85);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 24px;
+}
+
+.preview-modal {
+  position: relative;
+  max-width: min(95vw, 700px);
+  width: 100%;
+  padding: 18px;
+  background: rgba(10, 17, 34, 0.95);
+  border-radius: 22px;
+  box-shadow: 0 28px 120px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+.preview-modal-image,
+.preview-modal-qr {
+  width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 18px;
+}
+
+.preview-modal-qr {
+  padding: 20px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-qr-box {
+  position: relative;
+  width: min(340px, 100%);
+  padding: 12px;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.modal-qr-box .qr-overlay {
+  width: 70px;
+  height: 70px;
+  border-radius: 16px;
+}
+
+.preview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(228, 242, 255, 0.18);
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.preview-modal-caption {
+  margin: 14px 0 0;
+  color: #94a3b8;
 }
 
 .preview-note {

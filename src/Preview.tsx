@@ -124,7 +124,18 @@ export default function Preview() {
   const [savingImage, setSavingImage] = useState(false);
   const [qrGenerated, setQrGenerated] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [viewerOpen, setViewerOpen] = useState<'photo' | 'qr' | null>(null);
   const employeeRef = useRef<Employee | null>(initialEmployee);
+
+  const getResourceUrl = (src: string) => {
+    if (!src) return src;
+    if (src.startsWith('data:') || src.startsWith('http')) return src;
+    return `${window.location.origin}${src}`;
+  };
+
+  const openPhotoViewer = () => setViewerOpen('photo');
+  const openQrViewer = () => setViewerOpen('qr');
+  const closeViewer = () => setViewerOpen(null);
   const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -463,12 +474,19 @@ export default function Preview() {
       >
         <div className="preview-top-row">
           <div className="preview-avatar-frame">
+            <button
+              type="button"
+              className="preview-avatar-link"
+              onClick={openPhotoViewer}
+              aria-label="View full employee photo"
+            >
               <img
                 src={employee.photoUrl || '/data/default.png'}
                 alt="avatar"
                 className="preview-avatar"
                 crossOrigin="anonymous"
               />
+            </button>
           </div>
           <div className="preview-details">
             <SmallLabel>Employee Preview</SmallLabel>
@@ -490,7 +508,16 @@ export default function Preview() {
               </div>
               <div>
                 <SmallLabel>Home Page</SmallLabel>
-                <p className="preview-field">{employee.homePage || '—'}</p>
+                <p className="preview-field">
+                  <a
+                    href={employee.homePage || 'http://www.masdar.co'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="preview-field-link"
+                  >
+                    {employee.homePage || 'http://www.masdar.co'}
+                  </a>
+                </p>
               </div>
             </div>
           </div>
@@ -507,21 +534,26 @@ export default function Preview() {
           </div>
 
           <motion.div whileHover={{ scale: 1.03 }} className="preview-qr-panel">
-            <div className="preview-qr-box">
-              {qrGenerated ? (
-                <>
+            {qrGenerated ? (
+              <button
+                type="button"
+                className="preview-qr-button"
+                onClick={openQrViewer}
+                aria-label="View QR code"
+              >
+                <div className="preview-qr-box">
                   <QRCode value={contactValue} size={136} level="H" bgColor="#ffffff" fgColor="#0f172a" />
                   <div className="qr-overlay">
                     <img src={qrDefaultPhotoUrl} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
                   </div>
-                </>
-              ) : (
-                <div className="preview-skeleton">
-                  QR code not generated yet
                 </div>
-              )}
-            </div>
-            <p className="preview-note">{qrGenerated ? 'Scan to add this contact' : 'Generate the QR code first'}</p>
+              </button>
+            ) : (
+              <div className="preview-qr-box">
+                <div className="preview-skeleton">QR code not generated yet</div>
+              </div>
+            )}
+            <p className="preview-note">Tap the photo or QR code to view it larger.</p>
           </motion.div>
         </div>
 
@@ -545,6 +577,35 @@ export default function Preview() {
         </div>
         {exportError && <p className="preview-error-message">{exportError}</p>}
       </motion.div>
+
+      {viewerOpen ? (
+        <div className="preview-overlay" role="dialog" aria-modal="true" onClick={closeViewer}>
+          <div className="preview-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="preview-close" onClick={closeViewer} aria-label="Close viewer">
+              ×
+            </button>
+            {viewerOpen === 'photo' ? (
+              <img
+                src={getResourceUrl(employee.photoUrl || '/data/default.png')}
+                alt={employee.fullName}
+                className="preview-modal-image"
+              />
+            ) : (
+              <div className="preview-modal-qr">
+                <div className="preview-qr-box modal-qr-box">
+                  <QRCode value={contactValue} size={320} level="H" bgColor="#ffffff" fgColor="#0f172a" />
+                  <div className="qr-overlay">
+                    <img src={qrDefaultPhotoUrl} alt="Logo" className="qr-overlay-image" crossOrigin="anonymous" />
+                  </div>
+                </div>
+              </div>
+            )}
+            <p className="preview-modal-caption">
+              {viewerOpen === 'photo' ? 'Employee photo' : 'Employee QR code'}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

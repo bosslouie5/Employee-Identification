@@ -45,15 +45,59 @@ function App() {
   const [qrMessage, setQrMessage] = useState('');
   const [lastUpdate, setLastUpdate] = useState<number>(0);
   const [qrCenterPhotoUrl, setQrCenterPhotoUrl] = useState<string>(DEFAULT_AVATAR);
+  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const storedLogin = localStorage.getItem('app_access_granted');
-    if (storedLogin === 'true') {
+    // Check sessionStorage for login within current session
+    const sessionLogin = sessionStorage.getItem('app_access_granted');
+    if (sessionLogin === 'true') {
       setIsLoggedIn(true);
     }
   }, []);
+
+  // Auto-logout on inactivity (15 minutes)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimeoutRef.current) {
+        clearTimeout(inactivityTimeoutRef.current);
+      }
+
+      inactivityTimeoutRef.current = setTimeout(() => {
+        setLoginMessage('Session expired due to inactivity. Please log in again.');
+        sessionStorage.removeItem('app_access_granted');
+        setIsLoggedIn(false);
+        setIsAdmin(false);
+        setLoginPin('');
+        setAdminPin('');
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    // Set up event listeners for user activity
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    
+    events.forEach((event) => {
+      window.addEventListener(event, resetInactivityTimer);
+    });
+
+    // Initialize timer
+    resetInactivityTimer();
+
+    // Cleanup
+    return () => {
+      events.forEach((event) => {
+        window.removeEventListener(event, resetInactivityTimer);
+      });
+      if (inactivityTimeoutRef.current) {
+        clearTimeout(inactivityTimeoutRef.current);
+      }
+    };
+  }, [isLoggedIn]);
 
   const pageHeader = isAdminRoute ? 'Admin dashboard' : 'Public employee lookup';
   const pageSubTitle = isAdminRoute
@@ -720,13 +764,21 @@ function App() {
     event.preventDefault();
     if (loginPin.trim() === ADMIN_CODE) {
       setIsLoggedIn(true);
-      localStorage.setItem('app_access_granted', 'true');
+      sessionStorage.setItem('app_access_granted', 'true');
       setLoginMessage('Access granted. Welcome!');
       setLoginPin('');
       return;
     }
 
     setLoginMessage('Invalid access code. Please try again.');
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('app_access_granted');
+    setIsLoggedIn(false);
+    setLoginPin('');
+    setIsAdmin(false);
+    setAdminPin('');
   };
 
   const handleAdminSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -781,9 +833,27 @@ function App() {
         className="page-header"
       >
         <div>
-          <p className="eyebrow">Employee Sync Hub</p>
-          <h1>{pageHeader}</h1>
-          <p className="subtitle">{pageSubTitle}</p>
+          <div className="header-top-row">
+            <div>
+              <p className="eyebrow">Employee Sync Hub</p>
+              <h1>{pageHeader}</h1>
+              <p className="subtitle">{pageSubTitle}</p>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleLogout}
+              className="logout-button"
+              title="Log out and return to login"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Logout
+            </motion.button>
+          </div>
           <div className="status-strip">
             <span className="status-pill">{loading ? 'Syncing...' : fetchError ? 'Warning' : 'Live'}</span>
             <p className={`status-banner ${fetchError ? 'warning' : loading ? 'loading' : 'success'}`}>

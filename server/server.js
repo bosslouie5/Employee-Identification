@@ -71,7 +71,28 @@ function saveEmployeesToDisk(data) {
   }
 }
 
-let employees = loadEmployeesFromDisk();
+function attachPhotosToEmployees(employeesList) {
+  const photosDir = path.join(DATA_DIR, 'photos');
+  const available = fs.existsSync(photosDir) ? fs.readdirSync(photosDir) : [];
+  return employeesList.map((emp) => {
+    const updated = { ...emp };
+    if (!updated.photoUrl) {
+      const match = available.find((name) => name.startsWith(`${emp.id}-photo`));
+      if (match) updated.photoUrl = `/data/photos/${match}`;
+    }
+    if (!updated.idPhoto1) {
+      const match = available.find((name) => name.startsWith(`${emp.id}-id1`));
+      if (match) updated.idPhoto1 = `/data/photos/${match}`;
+    }
+    if (!updated.idPhoto2) {
+      const match = available.find((name) => name.startsWith(`${emp.id}-id2`));
+      if (match) updated.idPhoto2 = `/data/photos/${match}`;
+    }
+    return updated;
+  });
+}
+
+let employees = attachPhotosToEmployees(loadEmployeesFromDisk());
 
 app.use(cors());
 app.use(express.json());
@@ -96,11 +117,18 @@ function buildHeaderMap(headerRow) {
 }
 
 function findHeaderIndex(headerMap, keys) {
+  // Try multiple normalizations: normalized (spaces collapsed) and a simplified alphanumeric-only form
+  const simplifiedMap = Object.keys(headerMap).reduce((m, k) => {
+    const simple = k.replace(/[^a-z0-9]/g, '');
+    m[simple] = headerMap[k];
+    return m;
+  }, {});
+
   for (const key of keys) {
     const normalizedKey = normalizeHeader(key);
-    if (headerMap[normalizedKey]?.length) {
-      return headerMap[normalizedKey][0];
-    }
+    if (headerMap[normalizedKey]?.length) return headerMap[normalizedKey][0];
+    const simpleKey = normalizedKey.replace(/[^a-z0-9]/g, '');
+    if (simplifiedMap[simpleKey]?.length) return simplifiedMap[simpleKey][0];
   }
   return undefined;
 }
@@ -131,6 +159,8 @@ function pickCompanyFields(row, headerMap) {
 }
 
 function parseRows(rows) {
+  const headerMap = buildHeaderMap(rows[0] || []);
+
   return rows.slice(1).reduce((result, row) => {
     if (!row.some((cell) => String(cell || '').trim())) return result;
 
@@ -147,6 +177,15 @@ function parseRows(rows) {
     const reportsTo = String(row[33] || '').trim(); // Column AH
     const companyName = String(row[13] || '').trim(); // Column N
     const location = String(row[31] || '').trim(); // Column AF
+    // Attempt to read mobile phone from header-mapped columns (flexible keys)
+    const mobile = getCellValue(row, headerMap, [
+      'mobile formatted phone number',
+      'mobile  phone information phone number',
+      'mobile phone information phone number',
+      'mobile phone',
+      'mobile number',
+      'mobile'
+    ]);
     const status = 'Active';
     const homePage = 'http://www.masdar.co';
 
@@ -182,6 +221,7 @@ function parseRows(rows) {
       dateOfBirth,
       homePage,
       emailAddress,
+      phoneNumber: mobile || '',
       gender,
       reportsTo,
       photoUrl: '',
@@ -237,6 +277,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         if (prev.photoUrl) emp.photoUrl = prev.photoUrl;
         if (prev.idPhoto1) emp.idPhoto1 = prev.idPhoto1;
         if (prev.idPhoto2) emp.idPhoto2 = prev.idPhoto2;
+        // preserve phone number from previous dataset if the new import didn't include it
+        if (!emp.phoneNumber && prev.phoneNumber) emp.phoneNumber = prev.phoneNumber;
       }
 
       // If no previous record contained photo links, probe the photos folder for matching files

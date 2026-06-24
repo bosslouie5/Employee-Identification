@@ -124,7 +124,8 @@ button {
 }
 
 .preview-card {
-  width: min(520px, 100%);
+  /* Slightly wider preview card so longer company names fit without wrapping */
+  width: min(640px, 100%);
   max-width: 100%;
   border-radius: 20px;
   padding: 26px;
@@ -241,6 +242,16 @@ button {
 .preview-print-button {
   background: linear-gradient(135deg, #38bdf8, #818cf8);
   color: #020617;
+  border: none;
+  cursor: pointer;
+}
+
+.preview-save-button {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: #022018;
   border: none;
   cursor: pointer;
 }

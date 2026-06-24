@@ -14,6 +14,7 @@ export type Employee = {
   emailAddress: string;
   gender: string;
   reportsTo: string;
+  phoneNumber: string;
   photoUrl: string;
   idPhoto1: string;
   idPhoto2: string;
@@ -38,6 +39,7 @@ export const employees: Employee[] = [
     emailAddress: 'aileen.santos@example.com',
     gender: 'Female',
     reportsTo: 'Ana Cruz',
+    phoneNumber: '',
     photoUrl: '',
     idPhoto1: '',
     idPhoto2: '',
@@ -60,6 +62,7 @@ export const employees: Employee[] = [
     emailAddress: 'miguel.reyes@example.com',
     gender: 'Male',
     reportsTo: 'Joan Delacruz',
+    phoneNumber: '',
     photoUrl: '',
     idPhoto1: '',
     idPhoto2: '',

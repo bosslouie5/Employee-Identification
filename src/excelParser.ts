@@ -8,6 +8,30 @@ function getColumnValue(row: unknown[], index: number) {
   return String(value).trim();
 }
 
+function buildHeaderMap(headerRow: unknown[]) {
+  const map: Record<string, number[]> = {};
+  headerRow.forEach((value, index) => {
+    const key = String(value || '').trim().toLowerCase();
+    if (!key) return;
+    if (!map[key]) map[key] = [];
+    map[key].push(index);
+  });
+  return map;
+}
+
+function getHeaderValue(row: unknown[], headerMap: Record<string, number[]>, keys: string[]) {
+  for (const key of keys) {
+    const normalized = key.trim().toLowerCase();
+    const indexes = headerMap[normalized];
+    if (!indexes) continue;
+    for (const idx of indexes) {
+      const value = String(row[idx] || '').trim();
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
 function formatBirthdate(value: unknown) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -43,6 +67,8 @@ export async function parseExcelFile(file: File): Promise<Employee[]> {
 
   if (rows.length < 2) return [];
 
+  const headerMap = buildHeaderMap(rows[0] || []);
+
   return rows.slice(1).reduce<Employee[]>((result, row) => {
     if (!row.some((cell) => String(cell || '').trim())) return result;
 
@@ -55,6 +81,16 @@ export async function parseExcelFile(file: File): Promise<Employee[]> {
     const subDepartment = getColumnValue(row, 17); // Column R
     const division = getColumnValue(row, 15); // Column P
     const emailAddress = getColumnValue(row, 36); // Column AK
+    const mobile = getHeaderValue(row, headerMap, [
+      'mobile formatted phone number',
+      'mobile  phone information phone number',
+      'mobile phone information phone number',
+      'mobile phone',
+      'mobile number',
+      'mobile',
+      'phone number',
+      'phone'
+    ]);
     const reportsTo = getColumnValue(row, 33); // Column AH
     const companyName = getColumnValue(row, 13); // Column N
     const location = getColumnValue(row, 31); // Column AF
@@ -76,6 +112,7 @@ export async function parseExcelFile(file: File): Promise<Employee[]> {
       dateOfBirth,
       homePage: 'http://www.masdar.co',
       emailAddress,
+      phoneNumber: mobile || '',
       gender,
       reportsTo,
       photoUrl: '',
@@ -88,3 +125,4 @@ export async function parseExcelFile(file: File): Promise<Employee[]> {
     return result;
   }, []);
 }
+

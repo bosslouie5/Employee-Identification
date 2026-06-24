@@ -903,6 +903,10 @@ function App() {
                   <p>{activeData.emailAddress || '—'}</p>
                 </div>
                 <div className="field-block">
+                  <label>Mobile</label>
+                  <p>{activeData.phoneNumber || '—'}</p>
+                </div>
+                <div className="field-block">
                   <label>Location</label>
                   <p>{activeData.location}</p>
                 </div>

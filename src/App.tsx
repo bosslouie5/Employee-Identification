@@ -45,7 +45,7 @@ function App() {
   const [qrMessage, setQrMessage] = useState('');
   const [lastUpdate, setLastUpdate] = useState<number>(0);
   const [qrCenterPhotoUrl, setQrCenterPhotoUrl] = useState<string>(DEFAULT_AVATAR);
-  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inactivityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qrWrapperRef = useRef<HTMLDivElement | null>(null);
 
   const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds

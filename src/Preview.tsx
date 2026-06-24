@@ -38,6 +38,16 @@ async function fetchDataUrl(url: string) {
   }
 }
 
+async function createImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = (evt) => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
+
 async function inlineImageSources(root: HTMLElement) {
   const originalSrcs: Array<{ img: HTMLImageElement; src: string }> = [];
   const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
@@ -311,11 +321,84 @@ export default function Preview() {
     setExportError('');
     setSavingImage(true);
 
+    const qrBox = previewCardRef.current.querySelector<HTMLDivElement>('.preview-qr-box');
+    const originalQrChildren = qrBox ? Array.from(qrBox.childNodes) : [];
+    let qrReplacementImage: HTMLImageElement | null = null;
+
+    const createQrCompositeDataUrl = async () => {
+      if (!qrBox) return null;
+      const svgElement = qrBox.querySelector<SVGSVGElement>('svg');
+      const overlayElement = qrBox.querySelector<HTMLDivElement>('.qr-overlay');
+      const overlayImg = overlayElement?.querySelector<HTMLImageElement>('img');
+      if (!svgElement || !overlayElement || !overlayImg) return null;
+
+      const qrRect = svgElement.getBoundingClientRect();
+      const overlayRect = overlayElement.getBoundingClientRect();
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(qrRect.width * scale);
+      canvas.height = Math.round(qrRect.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const svgData = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const svgImage = await createImage(svgUrl);
+      URL.revokeObjectURL(svgUrl);
+      ctx.drawImage(svgImage, 0, 0, canvas.width, canvas.height);
+
+      const overlaySrc = await fetchDataUrl(overlayImg.src);
+      const overlayImage = await createImage(overlaySrc);
+      const overlayX = Math.round((overlayRect.left - qrRect.left) * scale);
+      const overlayY = Math.round((overlayRect.top - qrRect.top) * scale);
+      const overlayW = Math.round(overlayRect.width * scale);
+      const overlayH = Math.round(overlayRect.height * scale);
+
+      const radius = Math.round(10 * scale);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(overlayX + radius, overlayY);
+      ctx.lineTo(overlayX + overlayW - radius, overlayY);
+      ctx.quadraticCurveTo(overlayX + overlayW, overlayY, overlayX + overlayW, overlayY + radius);
+      ctx.lineTo(overlayX + overlayW, overlayY + overlayH - radius);
+      ctx.quadraticCurveTo(overlayX + overlayW, overlayY + overlayH, overlayX + overlayW - radius, overlayY + overlayH);
+      ctx.lineTo(overlayX + radius, overlayY + overlayH);
+      ctx.quadraticCurveTo(overlayX, overlayY + overlayH, overlayX, overlayY + overlayH - radius);
+      ctx.lineTo(overlayX, overlayY + radius);
+      ctx.quadraticCurveTo(overlayX, overlayY, overlayX + radius, overlayY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.lineWidth = Math.round(2 * scale);
+      ctx.stroke();
+
+      ctx.drawImage(overlayImage, overlayX, overlayY, overlayW, overlayH);
+
+      return canvas.toDataURL('image/png');
+    };
+
     try {
       // Hide interactive UI (buttons, links) so they are not included in exported image
       const buttonRow = previewCardRef.current.querySelector<HTMLDivElement>('.preview-button-row');
       const prevDisplay = buttonRow ? buttonRow.style.display : null;
       if (buttonRow) buttonRow.style.display = 'none';
+
+      if (qrBox) {
+        const qrDataUrl = await createQrCompositeDataUrl();
+        if (qrDataUrl) {
+          qrReplacementImage = document.createElement('img');
+          qrReplacementImage.src = qrDataUrl;
+          qrReplacementImage.alt = 'QR preview';
+          qrReplacementImage.style.width = '100%';
+          qrReplacementImage.style.height = 'auto';
+          qrReplacementImage.style.display = 'block';
+          qrBox.replaceChildren(qrReplacementImage);
+        }
+      }
 
       await waitForImages(previewCardRef.current);
       const originalSrcs = await inlineImageSources(previewCardRef.current);
@@ -327,6 +410,9 @@ export default function Preview() {
 
       // restore interactive UI after canvas capture
       if (buttonRow) buttonRow.style.display = prevDisplay || '';
+      if (qrBox && originalQrChildren.length > 0) {
+        qrBox.replaceChildren(...originalQrChildren);
+      }
 
       restoreImageSources(originalSrcs);
 
@@ -345,6 +431,9 @@ export default function Preview() {
     } catch (err) {
       console.error('Image export failed', err);
       setExportError('Failed to export image. Try again.');
+      if (qrBox && originalQrChildren.length > 0) {
+        qrBox.replaceChildren(...originalQrChildren);
+      }
     } finally {
       setSavingImage(false);
     }

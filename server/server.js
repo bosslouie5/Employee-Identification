@@ -63,6 +63,10 @@ function loadEmployeesFromDisk() {
   }
 }
 
+function normalizeEmployeeId(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
 function saveEmployeesToDisk(data) {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -358,15 +362,17 @@ app.post('/api/admin/photo/:id', upload.single('file'), (req, res) => {
   try {
     const photosDir = path.join(DATA_DIR, 'photos');
     if (!fs.existsSync(photosDir)) fs.mkdirSync(photosDir, { recursive: true });
-    const ext = path.extname(req.file.originalname) || '.png';
-    const nameMap = { photo: `${empId}-photo${ext}`, id1: `${empId}-id1${ext}`, id2: `${empId}-id2${ext}` };
-    const fileName = nameMap[field] || `${empId}-photo${ext}`;
+    const rawExt = path.extname(req.file.originalname || '').toLowerCase();
+    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(rawExt) ? rawExt : '.png';
+    const nameMap = { photo: `${empId}-photo${safeExt}`, id1: `${empId}-id1${safeExt}`, id2: `${empId}-id2${safeExt}` };
+    const fileName = nameMap[field] || `${empId}-photo${safeExt}`;
     const dest = path.join(photosDir, fileName);
     fs.writeFileSync(dest, req.file.buffer);
 
     // update employee record
     let updated = false;
-    const emp = employees.find((e) => e.id === empId);
+    const targetId = normalizeEmployeeId(empId);
+    const emp = employees.find((e) => normalizeEmployeeId(e.id) === targetId || normalizeEmployeeId(e.qrCodeData) === targetId);
     if (emp) {
       const urlPath = `/data/photos/${fileName}`;
       if (field === 'id1') emp.idPhoto1 = urlPath;

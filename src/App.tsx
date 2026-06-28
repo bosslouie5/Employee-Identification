@@ -588,6 +588,21 @@ function App() {
     }
   };
 
+  const updateEmployeePhotoState = (field: string, photoUrl: string) => {
+    const property = field === 'photo' ? 'photoUrl' : field === 'id1' ? 'idPhoto1' : 'idPhoto2';
+    if (!property || !activeData?.id) return;
+
+    setEmployees((current) =>
+      current.map((employee) =>
+        employee.id === activeData.id ? ({ ...employee, [property]: photoUrl } as Employee) : employee
+      )
+    );
+
+    setActive((current) =>
+      current && current.id === activeData.id ? ({ ...current, [property]: photoUrl } as Employee) : current
+    );
+  };
+
   const handleUploadDefaultPhotoFile = async (file: File) => {
     const previewUrl = URL.createObjectURL(file);
     setDefaultPhotoPreview(previewUrl);
@@ -671,6 +686,11 @@ function App() {
       });
       const j = await res.json();
       if (res.ok) {
+        const uploadedUrl = j.url ? cacheBustUrl(j.url) : null;
+        if (uploadedUrl) {
+          updateEmployeePhotoState(field, uploadedUrl);
+        }
+
         const newList = await fetchEmployees();
         if (newList && activeData) {
           const updated = newList.find((e: Employee) => e.id === activeData.id);
@@ -685,7 +705,7 @@ function App() {
           setPhotoFieldPreview(null);
         }
         if (j.updated === false) {
-          setUploadMessage('Photo uploaded but employee record not found on server. Upload the Excel source via Admin first.');
+          setUploadMessage('Photo uploaded and saved to disk. The employee profile will be updated once the matching record is available.');
         } else {
           setUploadMessage('Photo uploaded');
         }
@@ -713,13 +733,22 @@ function App() {
       });
       if (res.ok) {
         const j = await res.json();
+        const property = field === 'photo' ? 'photoUrl' : field === 'id1' ? 'idPhoto1' : 'idPhoto2';
+        if (property && activeData?.id) {
+          setEmployees((current) =>
+            current.map((employee) => employee.id === activeData.id ? ({ ...employee, [property]: '' } as Employee) : employee)
+          );
+          setActive((current) =>
+            current && current.id === activeData.id ? ({ ...current, [property]: '' } as Employee) : current
+          );
+        }
         const newList = await fetchEmployees();
         if (newList && activeData) {
           const updated = newList.find((e: Employee) => e.id === activeData.id);
           if (updated) setActive(updated);
         }
         if (j.updated === false) {
-          setUploadMessage('Photo removed from disk but employee record not found on server. Upload the Excel source via Admin first.');
+          setUploadMessage('Photo removed from disk. The employee profile will be refreshed once the matching record is available.');
         } else {
           setUploadMessage('Photo deleted');
         }
